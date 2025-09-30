@@ -3,16 +3,91 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>パート勤怠＆扶養判定（デモ）</title>
+  <title>パート出勤簿 & 扶養ライン見える化</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>パート勤怠＆扶養判定（デモ）</h1>
-  <label>氏名：<input id="name" /></label>
-  <label>時給(円)：<input id="wage" type="number" /></label>
-  <button id="save">保存</button>
-  <p id="msg"></p>
+  <header class="container">
+    <h1>パート出勤簿 & 扶養ライン見える化（デモ）</h1>
+    <p class="note">※ブラウザだけで動作（データはこのPCのブラウザに保存）。数値はデモ用の目安です。</p>
+  </header>
+
+  <main class="container">
+    <!-- 従業員情報 -->
+    <section class="card">
+      <h2>従業員情報</h2>
+      <div class="row">
+        <label>氏名
+          <input id="emp-name" placeholder="例）山田 花子" />
+        </label>
+        <label>時給（円）
+          <input id="emp-wage" type="number" inputmode="numeric" min="0" step="1" placeholder="例）1200" />
+        </label>
+        <button id="save-emp" class="btn">保存</button>
+        <button id="reset-data" class="btn btn-ghost">全データ初期化</button>
+      </div>
+      <p id="emp-msg" class="muted"></p>
+    </section>
+
+    <!-- 月選択/ナビ -->
+    <section class="card">
+      <h2>月の選択</h2>
+      <div class="row">
+        <button id="prev-month" class="btn">&laquo; 前の月</button>
+        <label>対象月
+          <input id="month-picker" type="month" />
+        </label>
+        <button id="next-month" class="btn">次の月 &raquo;</button>
+      </div>
+    </section>
+
+    <!-- 出勤簿（カレンダー） -->
+    <section class="card">
+      <h2>出勤簿（1日ごと）</h2>
+      <p class="muted">時間は「小数（0.25=15分、0.5=30分）」で入力。<br class="br-sm" />
+        例：7時間30分なら <strong>7.5</strong> と入力。</p>
+      <div id="calendar" class="calendar"></div>
+    </section>
+
+    <!-- 集計/扶養ライン -->
+    <section class="card">
+      <h2>月次集計 & 年収見込み</h2>
+      <div class="totals">
+        <div>
+          <div>月合計 時間</div>
+          <div id="sum-hours" class="kpi">0.00 h</div>
+        </div>
+        <div>
+          <div>月合計 賃金</div>
+          <div id="sum-wage" class="kpi">¥0</div>
+        </div>
+        <div>
+          <div>年収見込み（簡易）</div>
+          <div id="proj-annual" class="kpi">¥0</div>
+        </div>
+      </div>
+
+      <div class="threshold">
+        <div class="th-row">
+          <span class="th-label">103万円ライン</span>
+          <progress id="bar-103" value="0" max="100"></progress>
+          <span id="pct-103" class="th-pct">0%</span>
+        </div>
+        <div class="th-row">
+          <span class="th-label">130万円ライン</span>
+          <progress id="bar-130" value="0" max="100"></progress>
+          <span id="pct-130" class="th-pct">0%</span>
+        </div>
+        <p id="warn" class="warn"></p>
+        <p class="muted">※年収見込みは「今月の賃金 × 12」の簡易推計。実運用では年間合計や月平均からの推定に変える想定。</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container footer">
+    <small>© Demo. 税・社会保険の取り扱いは最新の法令/社内規程をご確認ください。</small>
+  </footer>
+
   <script src="script.js"></script>
 </body>
 </html>
-
