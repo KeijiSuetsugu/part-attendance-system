@@ -1,1 +1,4 @@
+body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; }
+label { display: block; margin: 8px 0; }
+button { padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; }
 
