@@ -76,7 +76,6 @@
             <button id="bulk-off-all" class="btn btn-ghost">月全体を休みに</button>
             <button id="bulk-weekdays-work" class="btn btn-ghost">平日を出勤に</button>
             <button id="bulk-weekends-off" class="btn btn-ghost">土日を休みに</button>
-            <!-- 新規：祝日 -->
             <button id="bulk-holidays-off" class="btn btn-ghost">祝日を休みに</button>
           </div>
           <p id="holiday-status" class="muted">祝日データ：未取得</p>
@@ -113,7 +112,6 @@
             ※「未出勤日は出勤にする」にチェックすると、休みの日も出勤化して時間を設定します。</p>
         </div>
 
-        <!-- 既存：前月→今月コピー -->
         <div class="bulk-block">
           <div class="bulk-title">前月の入力を今月へコピー</div>
           <div class="bulk-actions">
@@ -151,6 +149,9 @@
           <div id="proj-annual" class="kpi">¥0</div>
         </div>
       </div>
+
+      <!-- ★ 追加：シミュレーター設定の要約（カスタム金額も表示） -->
+      <div id="sim-cap-summary" class="cap-summary">シミュレーター設定：—</div>
 
       <div class="threshold">
         <div class="th-row">
