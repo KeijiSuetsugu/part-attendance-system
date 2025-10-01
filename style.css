@@ -32,8 +32,39 @@ h1, h2 { margin: 0 0 12px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 label { display: inline-flex; flex-direction: column; gap: 4px; font-size: 14px; min-width: 220px; }
 input[type="text"], input[type="number"], input[type="month"], select {
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px; /* ← ここを16px以上に（iOSの自動ズーム防止＆視認性アップ） */
+  width: 100%;
+  background: #fff;
+  color: var(--fg);
+  caret-color: var(--brand);
 }
+/* iOS/Androidの数値スピナー非表示 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+/* 既存 .time-row の直後あたりに追記 */
+.time-row { display: flex; gap: 6px; align-items: center; }
+.time-row input { flex: 1; min-width: 0; }
+
+/* 入力中の値を小さなピルで右側に表示 */
+.val-pill {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  border: 1px solid #c7d2fe;
+}
+
+@media (max-width: 560px) {
+  .time-row { flex-direction: column; align-items: stretch; }
+  .time-row input { font-size: 18px; } /* スマホで見やすく（自動ズームも防止） */
+  .help { align-self: flex-end; }
+}
+
 
 .btn {
   padding: 10px 14px; border-radius: 10px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer;
