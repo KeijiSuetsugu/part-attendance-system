@@ -10,7 +10,8 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif; }
 h1, h2 { margin: 0 0 12px; }
 .container { max-width: 980px; margin: 0 auto; padding: 16px; }
 .note { color: var(--muted); }
@@ -22,12 +23,13 @@ h1, h2 { margin: 0 0 12px; }
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  overflow: hidden; /* ①カレンダーが枠に収まるように */
 }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
-label { display: inline-flex; flex-direction: column; gap: 4px; font-size: 14px; }
-input[type="text"], input[type="number"], input[type="month"] {
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; min-width: 220px; font-size: 14px;
+label { display: inline-flex; flex-direction: column; gap: 4px; font-size: 14px; min-width: 220px; }
+input[type="text"], input[type="number"], input[type="month"], select {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; width: 100%;
 }
 
 .btn {
@@ -40,28 +42,36 @@ input[type="text"], input[type="number"], input[type="month"] {
 .warn { color: var(--warn); font-weight: 600; margin-top: 8px; }
 .footer { text-align: center; padding-bottom: 32px; }
 
+.tabs-wrap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.tab {
+  border: 1px solid var(--border); background: #fff; padding: 8px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.tab.active { border-color: var(--brand); color: var(--brand); font-weight: 600; }
+
+.calendar-frame { width: 100%; overflow-x: hidden; } /* 枠内に保持 */
 .calendar {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr)); /* ①列幅を枠内にフィット */
   gap: 8px;
+  width: 100%;
 }
 .day-head, .day-cell {
   background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px;
-  min-height: 96px; display: flex; flex-direction: column; gap: 6px;
+  min-height: 96px; display: flex; flex-direction: column; gap: 6px; min-width: 0; /* ①オーバーフロー抑止 */
 }
 .day-head { background: #fafafa; font-weight: 600; text-align: center; min-height: auto; }
 .day-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
-.badge {
-  font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); background: #f9fafb; color: var(--muted);
-}
+.badge { font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); background: #f9fafb; color: var(--muted); }
 .toggle {
   display: inline-block; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--ghost); cursor: pointer;
   text-align: center; user-select: none;
 }
 .toggle.on { background: #dcfce7; border-color: #16a34a; }
 .toggle.off { background: #fee2e2; border-color: #ef4444; }
+
 .time-row { display: flex; gap: 6px; align-items: center; }
-.time-row input { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.time-row input { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
 .help { font-size: 12px; color: var(--muted); }
 
 .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
@@ -75,3 +85,12 @@ input[type="text"], input[type="number"], input[type="month"] {
 progress { width: 100%; height: 14px; }
 progress::-webkit-progress-bar { background: #eee; border-radius: 999px; }
 progress::-webkit-progress-value { border-radius: 999px; }
+
+.sim-grid { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 12px; }
+@media (max-width: 920px) {
+  .sim-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .totals { grid-template-columns: 1fr; }
+  .sim-grid { grid-template-columns: 1fr; }
+}
