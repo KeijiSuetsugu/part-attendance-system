@@ -54,7 +54,7 @@ function ensureHolidaysForYear(year, callback){
   }
   if (fresh){ updateHolidayStatus(year, true, holidayCache.source||"holidays-jp"); if (callback) callback(); return; }
 
-  // 1) holidays-jp（年別のJSON）→ 2) Nager.Date にフォールバック
+  // 1) holidays-jp → 2) Nager.Date
   fetchHolidaysJP(year, function(map, src){
     holidayCache.years[ystr] = map; if (!holidayCache.updated) holidayCache.updated = {};
     holidayCache.updated[ystr] = Date.now(); holidayCache.source = src; saveHolidayCache();
@@ -86,7 +86,7 @@ function fetchNagerJP(year, success, fail){
     .then(function(list){
       var map = {};
       for (var i=0;i<list.length;i++){
-        var it = list[i]; // {date:"YYYY-MM-DD", localName:"元日", ...}
+        var it = list[i];
         map[it.date] = it.localName || it.name || "祝日";
       }
       success(map, "nager");
@@ -162,7 +162,7 @@ document.addEventListener("DOMContentLoaded", function(){
     e.name = ($("#emp-name").value || "").trim();
     e.wage = Number($("#emp-wage").value) || 0;
     $("#emp-msg").textContent = "従業員情報を保存しました。";
-    saveState(); recalcAndRender(); syncSimulatorWage(); renderYearSummary();
+    saveState(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateCapSummary();
   });
 
   onClick("reset-data", function(){
@@ -176,7 +176,7 @@ document.addEventListener("DOMContentLoaded", function(){
     $("#month-picker").value = state.ui.ym;
     $("#proj-mode").value = state.ui.projMode;
     if (yp) yp.value = getYearFromYM(state.ui.ym);
-    renderEmpTabs(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateBulkRangeLimits();
+    renderEmpTabs(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary();
   });
 
   // 月選択
@@ -184,18 +184,18 @@ document.addEventListener("DOMContentLoaded", function(){
     var sp = state.ui.ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
     var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()-1);
     state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); });
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); });
   });
   onClick("next-month", function(){
     var sp = state.ui.ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
     var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()+1);
     state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); });
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); });
   });
   var mp = $("#month-picker");
   if (mp) mp.addEventListener("change", function(e){
     state.ui.ym = e.target.value; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); });
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); });
   });
 
   // スタッフ追加 / 削除 / 並び替え
@@ -206,7 +206,7 @@ document.addEventListener("DOMContentLoaded", function(){
     state.currentEmpId = id; saveState(); renderEmpTabs();
     $("#emp-name").value = name.trim(); $("#emp-wage").value = isFinite(wage)?wage:0;
     $("#emp-msg").textContent = "新しいスタッフを追加しました。";
-    recalcAndRender(); syncSimulatorWage(); renderYearSummary();
+    recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateCapSummary();
   });
 
   onClick("del-emp", function(){
@@ -224,7 +224,7 @@ document.addEventListener("DOMContentLoaded", function(){
     saveState(); renderEmpTabs();
     var cur = currentEmployee(); $("#emp-name").value = cur ? (cur.name||"") : ""; $("#emp-wage").value = cur ? (cur.wage||0) : 0;
     $("#emp-msg").textContent = "スタッフを削除しました。";
-    recalcAndRender(); syncSimulatorWage(); renderYearSummary();
+    recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateCapSummary();
   });
 
   onClick("move-left", function(){
@@ -255,7 +255,7 @@ document.addEventListener("DOMContentLoaded", function(){
   onClick("bulk-off-all", bulkOffAll);
   onClick("bulk-weekdays-work", bulkWeekdaysWork);
   onClick("bulk-weekends-off", bulkWeekendsOff);
-  onClick("bulk-holidays-off", bulkHolidaysOff); // 新規：祝日を休みに
+  onClick("bulk-holidays-off", bulkHolidaysOff);
 
   // 一括操作（時間）
   var bulkScope = $("#bulk-scope"); if (bulkScope) bulkScope.addEventListener("change", onBulkScopeChange);
@@ -277,6 +277,7 @@ document.addEventListener("DOMContentLoaded", function(){
     recalcAndRender();
     renderYearSummary();
     updateBulkRangeLimits();
+    updateCapSummary();
   });
 });
 
@@ -293,7 +294,7 @@ function renderEmpTabs() {
       b.addEventListener("click", function(){
         state.currentEmpId = e.id; saveState();
         $("#emp-name").value = e.name || ""; $("#emp-wage").value = e.wage || 0; $("#emp-msg").textContent = "";
-        recalcAndRender(); syncSimulatorWage(); renderYearSummary(); renderEmpTabs();
+        recalcAndRender(); syncSimulatorWage(); renderYearSummary(); renderEmpTabs(); updateCapSummary();
       });
       wrap.appendChild(b);
     })(state.employees[i]);
@@ -341,7 +342,7 @@ function renderCalendar() {
       hbadge.className = "badge holiday";
       hbadge.textContent = hname;
       title.appendChild(hbadge);
-      // まだ未入力なら休みにしておく（手入力は上書きしない）
+      // まだ未入力なら休みに（手入力は尊重）
       if (!rec.work && (!rec.hours || Number(rec.hours)===0)){
         rec.work = false; rec.hours = 0;
       }
@@ -413,7 +414,7 @@ function renderTotals() {
   $("#sum-wage").textContent = fmtJPY(sumWage);
   $("#proj-annual").textContent = fmtJPY(projAnnual);
 
-  // バー
+  // 進捗バー
   var pct103 = THRESHOLDS.T103 ? Math.min(100, (projAnnual/THRESHOLDS.T103)*100) : 0;
   var pct106 = THRESHOLDS.T106 ? Math.min(100, (projAnnual/THRESHOLDS.T106)*100) : 0;
   var pct130 = THRESHOLDS.T130 ? Math.min(100, (projAnnual/THRESHOLDS.T130)*100) : 0;
@@ -421,7 +422,7 @@ function renderTotals() {
   var b106=$("#bar-106"), p106=$("#pct-106"); if(b106){ b106.value=pct106; } if(p106){ p106.textContent = Math.round(pct106)+"%"; }
   var b130=$("#bar-130"), p130=$("#pct-130"); if(b130){ b130.value=pct130; } if(p130){ p130.textContent = Math.round(pct130)+"%"; }
 
-  // 注意
+  // 注意文
   var msgs = [];
   if (projAnnual >= THRESHOLDS.T130) msgs.push("130万円ラインを超える見込みです。");
   else if (projAnnual >= THRESHOLDS.T130*0.9) msgs.push("130万円ラインの90%を超えています（要注意）。");
@@ -434,7 +435,10 @@ function renderTotals() {
 
   var warn=$("#warn"); if (warn) warn.textContent = msgs.join(" ");
 
-  // シミュレーター
+  // シミュレーター要約表示も更新
+  updateCapSummary();
+
+  // シミュレーター本体の表示も同期
   syncSimulatorWage();
   recalcSimulator();
 }
@@ -447,10 +451,46 @@ function onCapChange(){
   custom.disabled = (v !== "custom");
   recalcSimulator();
 }
+
 function syncSimulatorWage(){
   var wage = 0; var emp = currentEmployee(); if (emp) wage = Number(emp.wage)||0;
   var w = $("#cap-wage"); if (w) w.value = wage || "";
 }
+
+// ★ 追加：シミュレーター設定の要約を更新
+function getSelectedCap(){
+  var sel = $("#cap-select") ? $("#cap-select").value : "";
+  var label = "", cap = 0;
+  if (sel === "custom"){
+    var v = Number(($("#cap-custom") && $("#cap-custom").value) || 0);
+    cap = isFinite(v) && v>0 ? v : 0;
+    label = cap>0 ? "カスタム" : "カスタム（未入力）";
+  } else if (sel){
+    cap = Number(sel)||0;
+    if (cap===1030000) label = "103万円";
+    else if (cap===1060000) label = "106万円";
+    else if (cap===1300000) label = "130万円";
+    else label = "上限";
+  }
+  return { cap: cap, label: label };
+}
+function updateCapSummary(){
+  var box = $("#sim-cap-summary"); if (!box) return;
+  var wage = Number(($("#cap-wage") && $("#cap-wage").value) || 0);
+  var info = getSelectedCap();
+  if (!info.cap){
+    box.textContent = "シミュレーター設定：—";
+    return;
+  }
+  var hoursText = "時給未設定";
+  if (wage > 0){
+    var perMonth = info.cap / 12 / wage;
+    var rounded = Math.round(perMonth*4)/4;
+    hoursText = rounded.toFixed(2) + " h / 月";
+  }
+  box.innerHTML = 'シミュレーター設定：<strong>'+ fmtJPY(info.cap) +'</strong> / 年（'+ info.label +'） → 月上限 <strong>'+ hoursText +'</strong>';
+}
+
 function recalcSimulator(){
   var selEl = $("#cap-select"), custEl=$("#cap-custom"), wageEl=$("#cap-wage"), out=$("#cap-hours");
   if (!selEl || !wageEl || !out) return;
@@ -469,6 +509,9 @@ function recalcSimulator(){
     hours = rounded.toFixed(2) + " h / 月";
   }
   out.value = hours;
+
+  // 要約も同期
+  updateCapSummary();
 }
 
 // ===== 年間サマリー =====
@@ -516,7 +559,6 @@ function collectMonthRows(emp, ym){
 
   var rows = []; var sumH=0, sumW=0;
   rows.push(["Staff", (emp?emp.name:"") || "", "Year-Month", ym, "Hourly", wage]);
-  // 祝日名列を追加
   rows.push(["Date","Weekday","HolidayName","Work","Hours","DayWage"]);
 
   for (var d=1; d<=dim; d++){
@@ -594,7 +636,7 @@ function exportXlsxThisMonth(){
   if (typeof XLSX === "undefined"){ alert("Excel出力用ライブラリの読み込みに失敗しました。ネット接続をご確認ください。"); return; }
   var emp = currentEmployee(); var ym = state.ui.ym; var rows = collectMonthRows(emp, ym);
   var ws = XLSX.utils.aoa_to_sheet(rows);
-  ws["!cols"] = [{wch:12},{wch:6},{wch:10},{wch:6},{wch:8},{wch:12}]; // HolidayName列の分広げる
+  ws["!cols"] = [{wch:12},{wch:6},{wch:10},{wch:6},{wch:8},{wch:12}];
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
   XLSX.writeFile(wb, (((emp&&emp.name)||"noname")+"_"+ym+".xlsx"));
 }
