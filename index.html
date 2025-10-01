@@ -65,6 +65,52 @@
     </section>
 
     <!-- 一括操作 -->
+    <!-- 希望票の取り込み & 自動調整（AI） -->
+<section class="card">
+  <h2>希望票の取り込み & 自動調整（AI）</h2>
+
+  <div class="row">
+    <label style="min-width:100%;"><span>希望票（テキスト貼り付け）</span>
+      <textarea id="wish-text" rows="6" placeholder="例）
+扶養の範囲内でお願いします（103万円）。
+平日は10〜16時で入れます。土日は休み希望。
+15日・22日は休み。火曜は不可、木曜はOK。"></textarea>
+    </label>
+  </div>
+
+  <div class="row">
+    <label>標準シフト（h）
+      <input id="wish-default-hours" type="number" step="0.25" min="0" max="24" value="6" />
+    </label>
+
+    <label>土日ポリシー
+      <select id="wish-weekend-policy">
+        <option value="off" selected>土日休み</option>
+        <option value="on">土日も可</option>
+      </select>
+    </label>
+
+    <label class="checkline">
+      <input id="wish-holiday-off" type="checkbox" checked />
+      <span class="checktext">祝日は休みにする</span>
+    </label>
+
+    <label class="checkline">
+      <input id="wish-keep-existing" type="checkbox" checked />
+      <span class="checktext">既存入力を保持（不足分だけ埋める）</span>
+    </label>
+  </div>
+
+  <div class="row">
+    <button id="wish-parse" class="btn">解析（AI）</button>
+    <button id="wish-preview-btn" class="btn btn-ghost">プレビュー</button>
+    <button id="wish-apply" class="btn btn-ghost">自動割付を実行</button>
+  </div>
+
+  <div id="wish-summary" class="muted"></div>
+  <div id="wish-preview" class="wish-preview"></div>
+</section>
+    
     <section class="card">
       <h2>一括操作（出勤/休み & 時間）</h2>
       <div class="bulk-grid">
