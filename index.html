@@ -72,7 +72,8 @@
         <div class="bulk-block">
           <div class="bulk-title">出勤/休みの一括変換</div>
           <div class="bulk-actions">
-            <button id="bulk-work-all" class="btn">月全体を出勤に</button>
+            <!-- すべて ghost。押したものをJSで青（active）にします -->
+            <button id="bulk-work-all" class="btn btn-ghost">月全体を出勤に</button>
             <button id="bulk-off-all" class="btn btn-ghost">月全体を休みに</button>
             <button id="bulk-weekdays-work" class="btn btn-ghost">平日を出勤に</button>
             <button id="bulk-weekends-off" class="btn btn-ghost">土日を休みに</button>
@@ -104,7 +105,7 @@
             </label>
             <label class="checkline">
               <input id="bulk-mark-work" type="checkbox" />
-              未出勤日は出勤にして時間を入れる
+              <span class="checktext">未出勤日は出勤にして時間を入れる</span>
             </label>
             <button id="bulk-apply-hours" class="btn">一括適用</button>
           </div>
@@ -150,9 +151,10 @@
         </div>
       </div>
 
-      <!-- ★ 追加：シミュレーター設定の要約（カスタム金額も表示） -->
+      <!-- シミュレーター設定の要約（固定機能） -->
       <div id="sim-cap-summary" class="cap-summary">シミュレーター設定：—</div>
 
+      <!-- 既定ライン -->
       <div class="threshold">
         <div class="th-row">
           <span class="th-label">103万円ライン</span>
@@ -169,6 +171,21 @@
           <progress id="bar-130" value="0" max="100"></progress>
           <span id="pct-130" class="th-pct">0%</span>
         </div>
+
+        <!-- ★ 追加：カスタムライン A / B（自由入力） -->
+        <div class="th-row custom">
+          <label for="th-custom-a" class="th-label">カスタムラインA（円）</label>
+          <input id="th-custom-a" type="number" min="0" step="1000" placeholder="例）1200000" />
+          <progress id="bar-custom-a" value="0" max="100"></progress>
+          <span id="pct-custom-a" class="th-pct">0%</span>
+        </div>
+        <div class="th-row custom">
+          <label for="th-custom-b" class="th-label">カスタムラインB（円）</label>
+          <input id="th-custom-b" type="number" min="0" step="1000" placeholder="例）1500000" />
+          <progress id="bar-custom-b" value="0" max="100"></progress>
+          <span id="pct-custom-b" class="th-pct">0%</span>
+        </div>
+
         <p id="warn" class="warn"></p>
         <p class="muted">※106万円は社会保険加入判定に関わる目安（勤務先条件により扱いが異なる場合があります）。</p>
       </div>
@@ -228,7 +245,7 @@
     <small>© Demo. 税・社会保険の取り扱いは最新の法令/社内規程をご確認ください。</small>
   </footer>
 
-  <!-- Excel出力用ライブラリ（先に読み込み） -->
+  <!-- Excel出力用ライブラリ（先読み）。うまく読めない環境向けにJS側でフォールバックも用意 -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
   <script src="script.js"></script>
 </body>
