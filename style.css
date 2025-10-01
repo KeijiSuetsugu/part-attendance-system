@@ -11,8 +11,10 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif; }
+html, body {
+  margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+}
 h1, h2 { margin: 0 0 12px; }
 .container { max-width: 980px; margin: 0 auto; padding: 16px; }
 .note { color: var(--muted); }
@@ -24,7 +26,7 @@ h1, h2 { margin: 0 0 12px; }
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.04);
-  overflow: hidden; /* カレンダーが枠に収まるように */
+  overflow: hidden; /* カレンダーや子要素のはみ出し抑止 */
 }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -81,6 +83,14 @@ input[type="text"], input[type="number"], input[type="month"], select {
 .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
 .kpi { font-size: 24px; font-weight: 700; }
 
+/* ★ 追加：シミュレーター設定の要約 */
+.cap-summary {
+  margin-top: 8px; padding: 8px 10px;
+  background: #f9fafb; border: 1px solid var(--border); border-radius: 10px;
+  font-size: 14px;
+}
+.cap-summary strong { font-weight: 700; }
+
 .threshold { border-top: 1px dashed var(--border); padding-top: 12px; }
 .th-row { display: grid; grid-template-columns: 140px 1fr 64px; gap: 8px; align-items: center; margin: 6px 0; }
 .th-label { font-size: 14px; color: var(--muted); }
@@ -93,8 +103,20 @@ progress::-webkit-progress-value { border-radius: 999px; }
 .sim-grid { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 12px; }
 
 .year-table-wrap { overflow-x: auto; }
-.year-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.year-table th, .year-table td { border: 1px solid var(--border); padding: 8px; text-align: right; font-variant-numeric: tabular-nums; }
+.year-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;      /* ★固定レイアウトで折り返しを効かせる */
+  font-size: 13px;          /* ★やや小さめに */
+}
+.year-table th, .year-table td {
+  border: 1px solid var(--border);
+  padding: 6px;             /* ★ややコンパクトに */
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;  /* ★長い金額もセル内に折り返す */
+  line-height: 1.2;
+}
 .year-table th.month, .year-table td.month { text-align: center; }
 .year-table tfoot td { font-weight: 700; }
 
@@ -102,7 +124,7 @@ progress::-webkit-progress-value { border-radius: 999px; }
 .bulk-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .bulk-block { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; background: #fff; }
 .bulk-title { font-weight: 700; margin-bottom: 8px; }
-.bulk-actions { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; align-items: end; } /* 5列に拡張 */
+.bulk-actions { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; align-items: end; }
 .checkline { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 
 @media (max-width: 920px) {
@@ -113,4 +135,5 @@ progress::-webkit-progress-value { border-radius: 999px; }
   .totals { grid-template-columns: 1fr; }
   .sim-grid { grid-template-columns: 1fr; }
   .bulk-actions { grid-template-columns: 1fr; }
+  .year-table { font-size: 12px; } /* ★モバイルでさらに小さく */
 }
