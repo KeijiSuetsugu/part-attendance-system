@@ -96,10 +96,19 @@ progress::-webkit-progress-value { border-radius: 999px; }
 .year-table th.month, .year-table td.month { text-align: center; }
 .year-table tfoot td { font-weight: 700; }
 
+/* 一括操作 */
+.bulk-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.bulk-block { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; background: #fff; }
+.bulk-title { font-weight: 700; margin-bottom: 8px; }
+.bulk-actions { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+.checkline { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+
 @media (max-width: 920px) {
   .sim-grid { grid-template-columns: 1fr 1fr; }
+  .bulk-actions { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {
   .totals { grid-template-columns: 1fr; }
   .sim-grid { grid-template-columns: 1fr; }
+  .bulk-actions { grid-template-columns: 1fr; }
 }
