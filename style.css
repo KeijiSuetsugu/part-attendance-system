@@ -193,3 +193,35 @@ progress::-webkit-progress-value { border-radius: 999px; }
   .bulk-actions { grid-template-columns: 1fr; }
   .year-table { font-size: 12px; }
 }
+/* 希望票（AI） */
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px; /* スマホでも読みやすく */
+  background: #fff;
+  color: var(--fg);
+}
+
+.wish-preview {
+  margin-top: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  font-size: 14px;
+}
+.wish-preview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.wish-preview th, .wish-preview td {
+  border: 1px solid var(--border);
+  padding: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wish-preview th:first-child, .wish-preview td:first-child {
+  text-align: left;
+}
