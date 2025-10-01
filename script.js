@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", function(){
     e.name = ($("#emp-name").value || "").trim();
     e.wage = Number($("#emp-wage").value) || 0;
     $("#emp-msg").textContent = "従業員情報を保存しました。";
-    saveState(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateCapSummary();
+    saveState(); renderTotals(); syncSimulatorWage(); renderYearSummary(); updateCapSummary();
   });
 
   onClick("reset-data", function(){
@@ -218,7 +218,6 @@ document.addEventListener("DOMContentLoaded", function(){
 
   // 初期描画
   ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){
-    // カスタムライン初期値
     if ($("#th-custom-a")) $("#th-custom-a").value = state.ui.customCaps.a || "";
     if ($("#th-custom-b")) $("#th-custom-b").value = state.ui.customCaps.b || "";
     recalcAndRender();
@@ -283,13 +282,13 @@ function renderCalendar() {
     title.appendChild(daySpan);
     title.appendChild(monthBadge);
 
-    // 祝日バッジ（省略表示）
+    // 祝日
     var hname = getHolidayNameByDate(ym, day);
     if (hname){
       var hbadge = document.createElement("span");
       hbadge.className = "badge holiday";
-      hbadge.title = hname;          // フル名はツールチップで
-      hbadge.textContent = hname;    // 表示は省略あり
+      hbadge.title = hname;
+      hbadge.textContent = hname;
       title.appendChild(hbadge);
       if (!rec.work && (!rec.hours || Number(rec.hours)===0)){
         rec.work = false; rec.hours = 0;
@@ -308,14 +307,71 @@ function renderCalendar() {
     }(rec));
     cell.appendChild(tog);
 
-    var timeRow = document.createElement("div"); timeRow.className = "time-row";
-    var input = document.createElement("input"); input.type="number"; input.step="0.25"; input.min="0"; input.placeholder="勤務時間（h）";
-    input.value = rec.work ? String(rec.hours || "") : ""; input.disabled = !rec.work;
-    input.addEventListener("input", function(recRef, inputRef){
-      return function(){ var v = Number(inputRef.value); recRef.hours = isFinite(v) ? clamp(v,0,24) : 0; saveState(); renderTotals(); renderYearSummary(); };
-    }(rec, input));
-    var help = document.createElement("span"); help.className = "help"; help.textContent = "0.25=15分 / 0.5=30分";
-    timeRow.appendChild(input); timeRow.appendChild(help); cell.appendChild(timeRow);
+    // === 時間入力（スマホ視認性UP：入力欄 + 値ピル + ステッパー） ===
+    var timeRow = document.createElement("div");
+    timeRow.className = "time-row";
+
+    var input = document.createElement("input");
+    input.type = "number";
+    input.step = "0.25";
+    input.min = "0";
+    input.max = "24";
+    input.placeholder = "勤務時間（h）";
+    input.inputMode = "decimal";     // スマホで小数点キーボード
+    input.autocomplete = "off";
+    input.value = rec.work ? String(rec.hours || "") : "";
+    input.disabled = !rec.work;
+
+    // 値の見える化ピル
+    var pill = document.createElement("span");
+    pill.className = "val-pill";
+    pill.textContent = (rec.work && rec.hours > 0) ? (Number(rec.hours).toFixed(2) + " h") : "";
+
+    // ステッパー
+    var stepBox = document.createElement("div");
+    stepBox.className = "stepper";
+    function applyValue(newVal){
+      var v = clamp(newVal, 0, 24);
+      v = Math.round(v * 4) / 4; // 0.25刻み
+      rec.hours = v;
+      input.value = v ? String(v) : "";
+      pill.textContent = (rec.work && v>0) ? (v.toFixed(2) + " h") : "";
+      saveState(); renderTotals(); renderYearSummary();
+    }
+    function makeStep(label, delta){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-step";
+      b.textContent = label;
+      b.addEventListener("click", function(){
+        if (!rec.work) return;
+        var current = Number((input.value||"").replace(",", "."));
+        if (!isFinite(current)) current = 0;
+        applyValue(current + delta);
+      });
+      return b;
+    }
+    stepBox.appendChild(makeStep("−0.25", -0.25));
+    stepBox.appendChild(makeStep("+0.25", +0.25));
+    stepBox.appendChild(makeStep("+1.0", +1.0));
+
+    // 手入力（カンマ小数も許容）
+    input.addEventListener("input", function(){
+      var raw = (input.value || "").replace(",", ".");
+      var v = Number(raw);
+      if (!isFinite(v)) v = 0;
+      applyValue(v);
+    });
+
+    var help = document.createElement("span");
+    help.className = "help";
+    help.textContent = "0.25=15分 / 0.5=30分";
+
+    timeRow.appendChild(input);
+    timeRow.appendChild(pill);
+    timeRow.appendChild(stepBox);
+    timeRow.appendChild(help);
+    cell.appendChild(timeRow);
 
     root.appendChild(cell);
   }
@@ -354,12 +410,10 @@ function renderTotals() {
   $("#sum-wage").textContent = fmtJPY(sumWage);
   $("#proj-annual").textContent = fmtJPY(projAnnual);
 
-  // 既定ラインのバー
+  // 進捗バー
   setBar("bar-103","pct-103", projAnnual, THRESHOLDS.T103);
   setBar("bar-106","pct-106", projAnnual, THRESHOLDS.T106);
   setBar("bar-130","pct-130", projAnnual, THRESHOLDS.T130);
-
-  // カスタムライン（A/B）
   setBar("bar-custom-a","pct-custom-a", projAnnual, state.ui.customCaps.a||0);
   setBar("bar-custom-b","pct-custom-b", projAnnual, state.ui.customCaps.b||0);
 
@@ -373,7 +427,6 @@ function renderTotals() {
   else if (projAnnual >= THRESHOLDS.T103*0.9 && projAnnual < THRESHOLDS.T103) msgs.push("103万円ラインの90%を超えています（要注意）。");
   var warn=$("#warn"); if (warn) warn.textContent = msgs.join(" ");
 
-  // シミュレーター要約も更新
   updateCapSummary();
   syncSimulatorWage();
   recalcSimulator();
@@ -451,13 +504,13 @@ function renderYearSummary(){
   months.forEach(m=>html += "<th>"+m+"</th>");
   html += "<th>合計</th></tr></thead><tbody>";
 
-  // 金額行
+  // 金額
   html += '<tr><th class="month">金額</th>';
   var yearSum = 0;
   for (var m=1;m<=12;m++){ var a = calcMonthWage(emp, year, m).amount; yearSum += a; html += "<td>"+(a>0?fmtJPY(a):"—")+"</td>"; }
   html += "<td>"+fmtJPY(yearSum)+"</td></tr>";
 
-  // 時間行
+  // 時間
   html += '<tr><th class="month">時間(h)</th>';
   var yearHours = 0;
   for (var mm=1;mm<=12;mm++){ var h = calcMonthWage(emp, year, mm).hours; yearHours += h; html += "<td>"+(h>0?h.toFixed(2):"—")+"</td>"; }
@@ -541,7 +594,7 @@ function exportCsvAll(){
   download("all_staff_all_months.csv", BOM+csv, "text/csv;charset=utf-8");
 }
 
-// ★ Excelライブラリのフォールバックローダー
+// Excelライブラリのフォールバック
 function ensureXLSX(ready){
   if (window.XLSX) { ready(); return; }
   var s = document.createElement("script");
@@ -551,7 +604,7 @@ function ensureXLSX(ready){
     var s2 = document.createElement("script");
     s2.src = "https://unpkg.com/xlsx@0.20.3/dist/xlsx.full.min.js";
     s2.onload = ready;
-    s2.onerror = function(){ alert("Excel用ライブラリの読み込みに失敗しました。ネット環境またはCDNの制限をご確認ください。CSV出力は利用できます。"); };
+    s2.onerror = function(){ alert("Excel用ライブラリの読み込みに失敗しました。CSV出力をご利用ください。"); };
     document.head.appendChild(s2);
   };
   document.head.appendChild(s);
@@ -589,7 +642,7 @@ function updateBulkRangeLimits(){
   if (to){ to.min=1; to.max=dim; if (!to.value) to.value=dim; }
 }
 
-// アクティブ表示の制御（どれを押したか記録）
+// アクティブ表示（青ボタン）の制御
 var BULK_IDS = ["bulk-work-all","bulk-off-all","bulk-weekdays-work","bulk-weekends-off","bulk-holidays-off"];
 function setBulkActive(id){
   state.ui.bulkActiveId = id; saveState();
