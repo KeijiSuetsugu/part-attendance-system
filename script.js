@@ -179,6 +179,12 @@ document.addEventListener("DOMContentLoaded", function(){
   var bulkScope = $("#bulk-scope"); if (bulkScope) bulkScope.addEventListener("change", onBulkScopeChange);
   onClick("bulk-apply-hours", bulkApplyHours);
 
+  // 前月コピー（新規）
+  onClick("copy-prev-fill", function(){ copyPrevMonth(false); });
+  onClick("copy-prev-overwrite", function(){ 
+    if (confirm("前月の内容で今月をすべて上書きします。よろしいですか？")) copyPrevMonth(true);
+  });
+
   // 出力
   onClick("export-csv-month", exportCsvThisMonth);
   onClick("export-csv-all", exportCsvAll);
@@ -528,7 +534,6 @@ function bulkWeekendsOff(){
   for (var d=1; d<=dim; d++){ if (isWeekend(y,m,d)){ if (!md[String(d)]) md[String(d)]={work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; } }
   saveState(); recalcAndRender(); renderYearSummary();
 }
-
 function bulkApplyHours(){
   var ym = state.ui.ym, sp=ym.split("-"), y=Number(sp[0]), m=Number(sp[1]);
   var empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
@@ -562,4 +567,64 @@ function bulkApplyHours(){
   }
 
   saveState(); recalcAndRender(); renderYearSummary();
+}
+
+// ===== 前月→今月 コピー（新規） =====
+function getPrevYM(ym){
+  var sp = ym.split("-"); var y = Number(sp[0]), m = Number(sp[1]);
+  m -= 1; if (m===0){ y -= 1; m = 12; }
+  return y + "-" + pad2(m);
+}
+function isEmptyDay(rec){
+  // 「空」とみなす条件：存在しない／work=false かつ hoursが0/未設定
+  if (!rec) return true;
+  if (rec.work) return false; // 出勤が入っていれば空ではない
+  var h = Number(rec.hours||0);
+  return h===0;
+}
+function copyPrevMonth(overwrite){
+  var curYM = state.ui.ym;
+  var prevYM = getPrevYM(curYM);
+  var emp = currentEmployee(); if (!emp){ alert("スタッフが選択されていません。"); return; }
+  var empId = emp.id;
+
+  var mdPrev = ensureEmpMonth(empId, prevYM);
+  var mdCur  = ensureEmpMonth(empId, curYM);
+
+  var dimPrev = daysInMonth(prevYM);
+  var dimCur  = daysInMonth(curYM);
+  var limit = Math.min(dimPrev, dimCur);
+
+  // 前月に実データがあるかチェック
+  var hasData = false;
+  for (var d=1; d<=dimPrev; d++){
+    var r = mdPrev[String(d)];
+    if (r && (r.work || (r.hours && Number(r.hours)>0))){ hasData = true; break; }
+  }
+  if (!hasData){
+    alert("前月にコピーできるデータが見つかりません。");
+    return;
+  }
+
+  for (var day=1; day<=limit; day++){
+    var p = mdPrev[String(day)] || { work:false, hours:0 };
+    if (!mdCur[String(day)]) mdCur[String(day)] = { work:false, hours:0 };
+    var c = mdCur[String(day)];
+
+    if (overwrite){
+      c.work  = !!p.work;
+      c.hours = p.work ? (Number(p.hours)||0) : 0;
+    } else {
+      // 空欄のみ埋める
+      if (isEmptyDay(c)){
+        c.work  = !!p.work;
+        c.hours = p.work ? (Number(p.hours)||0) : 0;
+      }
+    }
+  }
+
+  saveState();
+  recalcAndRender();
+  renderYearSummary();
+  alert("前月の内容を今月へコピーしました。");
 }
