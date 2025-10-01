@@ -26,7 +26,7 @@ h1, h2 { margin: 0 0 12px; }
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.04);
-  overflow: hidden; /* カレンダーや子要素のはみ出し抑止 */
+  overflow: hidden; /* 子要素のはみ出し抑止 */
 }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -41,6 +41,7 @@ input[type="text"], input[type="number"], input[type="month"], select {
 .btn:hover { opacity: 0.95; }
 .btn-ghost { background: var(--ghost); color: var(--fg); border-color: var(--border); }
 .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-active { background: var(--brand) !important; color: #fff !important; border-color: var(--brand) !important; }
 
 .muted { color: var(--muted); }
 .warn { color: var(--warn); font-weight: 600; margin-top: 8px; }
@@ -56,18 +57,23 @@ input[type="text"], input[type="number"], input[type="month"], select {
 .calendar-frame { width: 100%; overflow-x: hidden; }
 .calendar {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr)); /* 列幅を枠内にフィット */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
 }
 .day-head, .day-cell {
   background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px;
-  min-height: 96px; display: flex; flex-direction: column; gap: 6px; min-width: 0; /* オーバーフロー抑止 */
+  min-height: 96px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
 }
 .day-head { background: #fafafa; font-weight: 600; text-align: center; min-height: auto; }
-.day-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-weight: 600; }
+
+/* 祝日名が長くてもセルが大きくならないように */
+.day-title { display: flex; align-items: center; gap: 6px; font-weight: 600; min-height: 28px; overflow: hidden; }
+.day-title > span:first-child { flex: 0 0 auto; }     /* 「○日」 */
+.day-title .badge { flex: 0 0 auto; max-width: 8.5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .badge { font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); background: #f9fafb; color: var(--muted); }
-.badge.holiday { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; } /* 祝日バッジ */
+.badge.holiday { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; }
 
 .toggle {
   display: inline-block; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--ghost); cursor: pointer;
@@ -83,7 +89,7 @@ input[type="text"], input[type="number"], input[type="month"], select {
 .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
 .kpi { font-size: 24px; font-weight: 700; }
 
-/* ★ 追加：シミュレーター設定の要約 */
+/* シミュレーター設定の要約 */
 .cap-summary {
   margin-top: 8px; padding: 8px 10px;
   background: #f9fafb; border: 1px solid var(--border); border-radius: 10px;
@@ -93,6 +99,7 @@ input[type="text"], input[type="number"], input[type="month"], select {
 
 .threshold { border-top: 1px dashed var(--border); padding-top: 12px; }
 .th-row { display: grid; grid-template-columns: 140px 1fr 64px; gap: 8px; align-items: center; margin: 6px 0; }
+.th-row.custom { grid-template-columns: 160px 140px 1fr 64px; } /* ラベル/入力/バー/％ */
 .th-label { font-size: 14px; color: var(--muted); }
 .th-pct { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -102,19 +109,20 @@ progress::-webkit-progress-value { border-radius: 999px; }
 
 .sim-grid { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 12px; }
 
+/* 年間サマリーは必ず枠内に収まる */
 .year-table-wrap { overflow-x: auto; }
 .year-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;      /* ★固定レイアウトで折り返しを効かせる */
-  font-size: 13px;          /* ★やや小さめに */
+  table-layout: fixed;
+  font-size: 13px;
 }
 .year-table th, .year-table td {
   border: 1px solid var(--border);
-  padding: 6px;             /* ★ややコンパクトに */
+  padding: 6px;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;  /* ★長い金額もセル内に折り返す */
+  overflow-wrap: anywhere;
   line-height: 1.2;
 }
 .year-table th.month, .year-table td.month { text-align: center; }
@@ -125,7 +133,10 @@ progress::-webkit-progress-value { border-radius: 999px; }
 .bulk-block { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; background: #fff; }
 .bulk-title { font-weight: 700; margin-bottom: 8px; }
 .bulk-actions { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; align-items: end; }
-.checkline { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+
+/* チェックボックス行の折り返し対策 */
+.checkline { display: flex; align-items: flex-start; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.checkline .checktext { flex: 1; min-width: 200px; line-height: 1.3; }
 
 @media (max-width: 920px) {
   .sim-grid { grid-template-columns: 1fr 1fr; }
@@ -135,5 +146,5 @@ progress::-webkit-progress-value { border-radius: 999px; }
   .totals { grid-template-columns: 1fr; }
   .sim-grid { grid-template-columns: 1fr; }
   .bulk-actions { grid-template-columns: 1fr; }
-  .year-table { font-size: 12px; } /* ★モバイルでさらに小さく */
+  .year-table { font-size: 12px; }
 }
