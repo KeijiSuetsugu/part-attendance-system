@@ -76,7 +76,10 @@
             <button id="bulk-off-all" class="btn btn-ghost">月全体を休みに</button>
             <button id="bulk-weekdays-work" class="btn btn-ghost">平日を出勤に</button>
             <button id="bulk-weekends-off" class="btn btn-ghost">土日を休みに</button>
+            <!-- 新規：祝日 -->
+            <button id="bulk-holidays-off" class="btn btn-ghost">祝日を休みに</button>
           </div>
+          <p id="holiday-status" class="muted">祝日データ：未取得</p>
         </div>
 
         <div class="bulk-block">
@@ -110,7 +113,7 @@
             ※「未出勤日は出勤にする」にチェックすると、休みの日も出勤化して時間を設定します。</p>
         </div>
 
-        <!-- 新規：前月→今月コピー -->
+        <!-- 既存：前月→今月コピー -->
         <div class="bulk-block">
           <div class="bulk-title">前月の入力を今月へコピー</div>
           <div class="bulk-actions">
