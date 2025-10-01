@@ -13,9 +13,18 @@
   </header>
 
   <main class="container">
-    <!-- 従業員情報 -->
+    <!-- スタッフタブ -->
     <section class="card">
-      <h2>従業員情報</h2>
+      <h2>スタッフ</h2>
+      <div class="tabs-wrap">
+        <div id="emp-tabs" class="tabs" aria-label="スタッフのタブ"></div>
+        <button id="add-emp" class="btn btn-ghost" title="スタッフを追加">＋スタッフ追加</button>
+      </div>
+    </section>
+
+    <!-- 従業員情報（選択中のスタッフ） -->
+    <section class="card">
+      <h2>従業員情報（選択中）</h2>
       <div class="row">
         <label>氏名
           <input id="emp-name" placeholder="例）山田 花子" />
@@ -44,9 +53,10 @@
     <!-- 出勤簿（カレンダー） -->
     <section class="card">
       <h2>出勤簿（1日ごと）</h2>
-      <p class="muted">時間は「小数（0.25=15分、0.5=30分）」で入力。<br class="br-sm" />
-        例：7時間30分なら <strong>7.5</strong> と入力。</p>
-      <div id="calendar" class="calendar"></div>
+      <p class="muted">時間は「小数（0.25=15分、0.5=30分）」で入力。例：7時間30分→ <strong>7.5</strong></p>
+      <div class="calendar-frame">
+        <div id="calendar" class="calendar" role="grid" aria-label="勤務カレンダー"></div>
+      </div>
     </section>
 
     <!-- 集計/扶養ライン -->
@@ -81,6 +91,30 @@
         <p id="warn" class="warn"></p>
         <p class="muted">※年収見込みは「今月の賃金 × 12」の簡易推計。実運用では年間合計や月平均からの推定に変える想定。</p>
       </div>
+    </section>
+
+    <!-- 扶養シミュレーター -->
+    <section class="card">
+      <h2>扶養シミュレーター（月あたり上限時間）</h2>
+      <div class="sim-grid">
+        <label>対象ライン
+          <select id="cap-select">
+            <option value="1030000">103万円</option>
+            <option value="1300000">130万円</option>
+            <option value="custom">カスタム（金額を入力）</option>
+          </select>
+        </label>
+        <label>カスタム金額（円）
+          <input id="cap-custom" type="number" min="0" step="1000" placeholder="例）1060000" disabled />
+        </label>
+        <label>時給（円）※自動で反映
+          <input id="cap-wage" type="number" min="0" step="1" disabled />
+        </label>
+        <label>月あたり上限時間（目安）
+          <input id="cap-hours" type="text" readonly />
+        </label>
+      </div>
+      <p class="muted">式：<code>月上限時間 ≒ 年間上限金額 ÷ 12 ÷ 時給</code>（端数は四捨五入）。調整バッファは各事業所の運用に合わせてください。</p>
     </section>
   </main>
 
