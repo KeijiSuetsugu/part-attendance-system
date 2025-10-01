@@ -18,7 +18,10 @@
       <h2>スタッフ</h2>
       <div class="tabs-wrap">
         <div id="emp-tabs" class="tabs" aria-label="スタッフのタブ"></div>
-        <button id="add-emp" class="btn btn-ghost" title="スタッフを追加">＋スタッフ追加</button>
+        <div class="tab-actions">
+          <button id="add-emp" class="btn btn-ghost" title="スタッフを追加">＋スタッフ追加</button>
+          <button id="del-emp" class="btn btn-danger" title="選択中スタッフを削除">－スタッフ削除</button>
+        </div>
       </div>
     </section>
 
@@ -62,6 +65,15 @@
     <!-- 集計/扶養ライン -->
     <section class="card">
       <h2>月次集計 & 年収見込み</h2>
+      <div class="row">
+        <label>年収見込みの方法
+          <select id="proj-mode">
+            <option value="thismonth">今月×12（簡易）</option>
+            <option value="avg-rest">月平均×残り月（年初〜今月まで）</option>
+          </select>
+        </label>
+      </div>
+
       <div class="totals">
         <div>
           <div>月合計 時間</div>
@@ -72,7 +84,7 @@
           <div id="sum-wage" class="kpi">¥0</div>
         </div>
         <div>
-          <div>年収見込み（簡易）</div>
+          <div>年収見込み</div>
           <div id="proj-annual" class="kpi">¥0</div>
         </div>
       </div>
@@ -89,7 +101,7 @@
           <span id="pct-130" class="th-pct">0%</span>
         </div>
         <p id="warn" class="warn"></p>
-        <p class="muted">※年収見込みは「今月の賃金 × 12」の簡易推計。実運用では年間合計や月平均からの推定に変える想定。</p>
+        <p class="muted">※「月平均×残り月」は、年初から選択月までの**実績**平均で残り月を予測します。</p>
       </div>
     </section>
 
@@ -114,7 +126,18 @@
           <input id="cap-hours" type="text" readonly />
         </label>
       </div>
-      <p class="muted">式：<code>月上限時間 ≒ 年間上限金額 ÷ 12 ÷ 時給</code>（端数は四捨五入）。調整バッファは各事業所の運用に合わせてください。</p>
+      <p class="muted">式：<code>月上限時間 ≒ 年間上限金額 ÷ 12 ÷ 時給</code>（15分刻み丸め）。</p>
+    </section>
+
+    <!-- データ出力 -->
+    <section class="card">
+      <h2>データ出力</h2>
+      <div class="row">
+        <button id="export-csv-month" class="btn">CSV出力（このスタッフ・この月）</button>
+        <button id="export-csv-all" class="btn btn-ghost">CSV出力（全スタッフ・全期間）</button>
+        <button id="export-xlsx-month" class="btn">Excel出力（.xlsx / このスタッフ・この月）</button>
+      </div>
+      <p class="muted">CSVはExcelで開けます（UTF-8 / BOM付き）。.xlsx出力はSheetJSを使用。</p>
     </section>
   </main>
 
@@ -122,6 +145,8 @@
     <small>© Demo. 税・社会保険の取り扱いは最新の法令/社内規程をご確認ください。</small>
   </footer>
 
+  <!-- Excel出力用ライブラリ（先に読み込み） -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
