@@ -1,6 +1,6 @@
 # パート出勤簿 & 扶養ライン見える化
 
-- **公開デモ**: PAGES_URL
+- **公開デモ**: https://keijisuetsugu.github.io/part-attendance-system/
 - **リポジトリ**: REPO_URL
 
 ## 概要
