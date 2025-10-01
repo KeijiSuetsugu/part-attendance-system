@@ -13,6 +13,7 @@
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+  -webkit-text-size-adjust: 100%;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 h1, h2 { margin: 0 0 12px; }
@@ -26,14 +27,28 @@ h1, h2 { margin: 0 0 12px; }
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.04);
-  overflow: hidden; /* 子要素のはみ出し抑止 */
+  overflow: hidden; /* 子要素はみ出し抑止 */
 }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 label { display: inline-flex; flex-direction: column; gap: 4px; font-size: 14px; min-width: 220px; }
+
+/* 入力欄は16px以上（iOS自動ズーム防止 & 視認性UP） */
 input[type="text"], input[type="number"], input[type="month"], select {
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  width: 100%;
+  background: #fff;
+  color: var(--fg);
+  caret-color: var(--brand);
 }
+
+/* 数値スピナー非表示（iOS/Android/Firefox） */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
 
 .btn {
   padding: 10px 14px; border-radius: 10px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer;
@@ -67,7 +82,7 @@ input[type="text"], input[type="number"], input[type="month"], select {
 }
 .day-head { background: #fafafa; font-weight: 600; text-align: center; min-height: auto; }
 
-/* 祝日名が長くてもセルが大きくならないように */
+/* 祝日名が長くても高さが伸びない（…で省略） */
 .day-title { display: flex; align-items: center; gap: 6px; font-weight: 600; min-height: 28px; overflow: hidden; }
 .day-title > span:first-child { flex: 0 0 auto; }     /* 「○日」 */
 .day-title .badge { flex: 0 0 auto; max-width: 8.5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -82,9 +97,40 @@ input[type="text"], input[type="number"], input[type="month"], select {
 .toggle.on { background: #dcfce7; border-color: #16a34a; }
 .toggle.off { background: #fee2e2; border-color: #ef4444; }
 
-.time-row { display: flex; gap: 6px; align-items: center; }
-.time-row input { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+/* === 時間入力（スマホ最適化） === */
+.time-row { display: flex; gap: 8px; align-items: center; }
+.time-row input { flex: 1; min-width: 0; }
+
+.val-pill {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  border: 1px solid #c7d2fe;
+}
+
+/* ステッパー */
+.stepper { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
+.btn-step {
+  min-width: 56px; height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--ghost);
+  color: var(--fg);
+  font-size: 16px;
+  cursor: pointer;
+}
+.btn-step:active { transform: translateY(1px); }
+
 .help { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 560px) {
+  .time-row { flex-direction: column; align-items: stretch; }
+  .time-row input { font-size: 18px; } /* 入力数字を大きく */
+  .stepper { justify-content: space-between; }
+  .help { align-self: flex-end; }
+}
 
 .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
 .kpi { font-size: 24px; font-weight: 700; }
@@ -99,7 +145,7 @@ input[type="text"], input[type="number"], input[type="month"], select {
 
 .threshold { border-top: 1px dashed var(--border); padding-top: 12px; }
 .th-row { display: grid; grid-template-columns: 140px 1fr 64px; gap: 8px; align-items: center; margin: 6px 0; }
-.th-row.custom { grid-template-columns: 160px 140px 1fr 64px; } /* ラベル/入力/バー/％ */
+.th-row.custom { grid-template-columns: 160px 140px 1fr 64px; }
 .th-label { font-size: 14px; color: var(--muted); }
 .th-pct { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -134,7 +180,6 @@ progress::-webkit-progress-value { border-radius: 999px; }
 .bulk-title { font-weight: 700; margin-bottom: 8px; }
 .bulk-actions { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; align-items: end; }
 
-/* チェックボックス行の折り返し対策 */
 .checkline { display: flex; align-items: flex-start; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .checkline .checktext { flex: 1; min-width: 200px; line-height: 1.3; }
 
