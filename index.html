@@ -19,8 +19,10 @@
       <div class="tabs-wrap">
         <div id="emp-tabs" class="tabs" aria-label="スタッフのタブ"></div>
         <div class="tab-actions">
-          <button id="add-emp" class="btn btn-ghost" title="スタッフを追加">＋スタッフ追加</button>
-          <button id="del-emp" class="btn btn-danger" title="選択中スタッフを削除">－スタッフ削除</button>
+          <button id="move-left" class="btn btn-ghost" title="左へ並び替え">← 左へ</button>
+          <button id="move-right" class="btn btn-ghost" title="右へ並び替え">右へ →</button>
+          <button id="add-emp" class="btn btn-ghost" title="スタッフを追加">＋ 追加</button>
+          <button id="del-emp" class="btn btn-danger" title="選択中スタッフを削除">－ 削除</button>
         </div>
       </div>
     </section>
@@ -96,12 +98,17 @@
           <span id="pct-103" class="th-pct">0%</span>
         </div>
         <div class="th-row">
+          <span class="th-label">106万円ライン</span>
+          <progress id="bar-106" value="0" max="100"></progress>
+          <span id="pct-106" class="th-pct">0%</span>
+        </div>
+        <div class="th-row">
           <span class="th-label">130万円ライン</span>
           <progress id="bar-130" value="0" max="100"></progress>
           <span id="pct-130" class="th-pct">0%</span>
         </div>
         <p id="warn" class="warn"></p>
-        <p class="muted">※「月平均×残り月」は、年初から選択月までの**実績**平均で残り月を予測します。</p>
+        <p class="muted">※106万円は社会保険加入判定に関わる目安（勤務先条件により扱いが異なる場合があります）。</p>
       </div>
     </section>
 
@@ -112,6 +119,7 @@
         <label>対象ライン
           <select id="cap-select">
             <option value="1030000">103万円</option>
+            <option value="1060000">106万円</option>
             <option value="1300000">130万円</option>
             <option value="custom">カスタム（金額を入力）</option>
           </select>
@@ -127,6 +135,19 @@
         </label>
       </div>
       <p class="muted">式：<code>月上限時間 ≒ 年間上限金額 ÷ 12 ÷ 時給</code>（15分刻み丸め）。</p>
+    </section>
+
+    <!-- 年間サマリー（各月×金額） -->
+    <section class="card">
+      <h2>年間サマリー（各月×金額）</h2>
+      <div class="row">
+        <label>年を選択
+          <input id="year-picker" type="number" min="2000" step="1" />
+        </label>
+        <button id="refresh-summary" class="btn btn-ghost">再計算</button>
+      </div>
+      <div id="year-summary" class="year-table-wrap"></div>
+      <p class="muted">金額は「当月の合計時間 × 現在の時給」。月ごとに時給が変わる運用の場合は、月次表からExcelで補正してください。</p>
     </section>
 
     <!-- データ出力 -->
