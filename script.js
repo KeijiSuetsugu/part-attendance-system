@@ -1,5 +1,5 @@
 // ===== 設定値 =====
-const THRESHOLDS = { T103: 1030000, T130: 1300000 };
+const THRESHOLDS = { T103: 1030000, T106: 1060000, T130: 1300000 };
 const STORAGE_KEY = "part_attendance_v2"; // v2構造
 
 // ===== ユーティリティ =====
@@ -12,9 +12,10 @@ const ymd = (ym, d) => `${ym}-${pad2(d)}`;
 const youbi = (y, m, d) => ["日","月","火","水","木","金","土"][new Date(y, m-1, d).getDay()];
 
 // ===== 状態（v2構造） =====
-let state = loadStateOrMigrate();
 // state = { employees:[{id,name,wage}], currentEmpId:"", months:{ [empId]:{ [ym]:{ "1":{work,hours}, ... } } }, ui:{ym:"YYYY-MM", projMode:"thismonth"} }
+let state = loadStateOrMigrate();
 
+// ==== 旧v1→v2 移行 ====
 function migrateV1ToV2(old) {
   const firstId = uid();
   const employees = [{ id: firstId, name: old.employee?.name || "", wage: old.employee?.wage || 0 }];
@@ -74,6 +75,9 @@ function ensureEmpMonth(empId, ym) {
   state.months[empId][ym] ||= {};
   return state.months[empId][ym];
 }
+function getYearFromYM(ym) {
+  return Number(ym.split("-")[0]);
+}
 
 // ===== 初期化 =====
 document.addEventListener("DOMContentLoaded", () => {
@@ -84,6 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#emp-wage").value = emp?.wage || "";
   $("#month-picker").value = state.ui.ym;
   $("#proj-mode").value = state.ui.projMode || "thismonth";
+  $("#year-picker").value = getYearFromYM(state.ui.ym);
 
   $("#save-emp").addEventListener("click", () => {
     const e = currentEmployee();
@@ -94,6 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
     recalcAndRender();
     syncSimulatorWage();
+    renderYearSummary();
   });
 
   $("#reset-data").addEventListener("click", () => {
@@ -105,9 +111,11 @@ document.addEventListener("DOMContentLoaded", () => {
       $("#emp-msg").textContent = "データを初期化しました。";
       $("#month-picker").value = state.ui.ym;
       $("#proj-mode").value = state.ui.projMode;
+      $("#year-picker").value = getYearFromYM(state.ui.ym);
       renderEmpTabs();
       recalcAndRender();
       syncSimulatorWage();
+      renderYearSummary();
     }
   });
 
@@ -117,8 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
     d.setMonth(d.getMonth() - 1);
     state.ui.ym = toYM(d);
     $("#month-picker").value = state.ui.ym;
+    $("#year-picker").value = getYearFromYM(state.ui.ym);
     saveState();
     recalcAndRender();
+    renderYearSummary();
   });
   $("#next-month").addEventListener("click", () => {
     const [y, m] = state.ui.ym.split("-").map(Number);
@@ -126,16 +136,20 @@ document.addEventListener("DOMContentLoaded", () => {
     d.setMonth(d.getMonth() + 1);
     state.ui.ym = toYM(d);
     $("#month-picker").value = state.ui.ym;
+    $("#year-picker").value = getYearFromYM(state.ui.ym);
     saveState();
     recalcAndRender();
+    renderYearSummary();
   });
   $("#month-picker").addEventListener("change", (e) => {
     state.ui.ym = e.target.value;
+    $("#year-picker").value = getYearFromYM(state.ui.ym);
     saveState();
     recalcAndRender();
+    renderYearSummary();
   });
 
-  // スタッフ追加 / 削除
+  // スタッフ追加 / 削除 / 並び替え
   $("#add-emp").addEventListener("click", () => {
     const name = prompt("スタッフ名を入力してください");
     if (!name) return;
@@ -151,6 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#emp-msg").textContent = "新しいスタッフを追加しました。";
     recalcAndRender();
     syncSimulatorWage();
+    renderYearSummary();
   });
 
   $("#del-emp").addEventListener("click", () => {
@@ -158,18 +173,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const e = currentEmployee();
     if (!confirm(`「${e.name || "（無名）"}」を削除します。よろしいですか？`)) return;
 
-    // 削除
     const idx = state.employees.findIndex(x => x.id === e.id);
     if (idx >= 0) state.employees.splice(idx, 1);
     delete state.months[e.id];
 
-    // 最低1人は保持（空なら新規作成）
     if (state.employees.length === 0) {
       const id = uid();
       state.employees.push({ id, name: "", wage: 0 });
       state.currentEmpId = id;
     } else {
-      // 次に選択するID
       const next = state.employees[Math.max(0, idx - 1)];
       state.currentEmpId = next.id;
     }
@@ -181,6 +193,30 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#emp-msg").textContent = "スタッフを削除しました。";
     recalcAndRender();
     syncSimulatorWage();
+    renderYearSummary();
+  });
+
+  $("#move-left").addEventListener("click", () => {
+    const id = state.currentEmpId;
+    const idx = state.employees.findIndex(e => e.id === id);
+    if (idx > 0) {
+      const tmp = state.employees[idx - 1];
+      state.employees[idx - 1] = state.employees[idx];
+      state.employees[idx] = tmp;
+      saveState();
+      renderEmpTabs();
+    }
+  });
+  $("#move-right").addEventListener("click", () => {
+    const id = state.currentEmpId;
+    const idx = state.employees.findIndex(e => e.id === id);
+    if (idx >= 0 && idx < state.employees.length - 1) {
+      const tmp = state.employees[idx + 1];
+      state.employees[idx + 1] = state.employees[idx];
+      state.employees[idx] = tmp;
+      saveState();
+      renderEmpTabs();
+    }
   });
 
   // 見込みモード切替
@@ -190,11 +226,15 @@ document.addEventListener("DOMContentLoaded", () => {
     recalcAndRender();
   });
 
-  // シミュレーター
+  // 扶養シミュレーター
   $("#cap-select").addEventListener("change", onCapChange);
   $("#cap-custom").addEventListener("input", recalcSimulator);
   syncSimulatorWage();
   onCapChange();
+
+  // 年間サマリー
+  $("#year-picker").addEventListener("change", renderYearSummary);
+  $("#refresh-summary").addEventListener("click", renderYearSummary);
 
   // 出力
   $("#export-csv-month").addEventListener("click", exportCsvThisMonth);
@@ -203,6 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 初期描画
   recalcAndRender();
+  renderYearSummary();
 });
 
 // ===== タブ描画 =====
@@ -222,13 +263,14 @@ function renderEmpTabs() {
       $("#emp-msg").textContent = "";
       recalcAndRender();
       syncSimulatorWage();
+      renderYearSummary();
       renderEmpTabs();
     });
     wrap.appendChild(b);
   });
 }
 
-// ===== レンダリング =====
+// ===== レンダリング（カレンダー・集計） =====
 function recalcAndRender() {
   renderCalendar();
   renderTotals();
@@ -240,4 +282,335 @@ function renderCalendar() {
   const root = $("#calendar");
   root.innerHTML = "";
 
-  // 曜日ヘッ
+  ["日","月","火","水","木","金","土"].forEach((h) => {
+    const el = document.createElement("div");
+    el.className = "day-head";
+    el.textContent = h;
+    root.appendChild(el);
+  });
+
+  const dow = firstDow(ym);
+  const dim = daysInMonth(ym);
+  const monthData = ensureEmpMonth(empId, ym);
+
+  for (let i = 0; i < dow; i++) {
+    const empty = document.createElement("div");
+    empty.className = "day-cell";
+    empty.style.visibility = "hidden";
+    root.appendChild(empty);
+  }
+
+  for (let day = 1; day <= dim; day++) {
+    const key = String(day);
+    const rec = (monthData[key] ||= { work: false, hours: 0 });
+
+    const cell = document.createElement("div");
+    cell.className = "day-cell";
+
+    const title = document.createElement("div");
+    title.className = "day-title";
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = ym;
+    title.innerHTML = `<span>${day}日</span>`;
+    title.appendChild(badge);
+    cell.appendChild(title);
+
+    const tog = document.createElement("div");
+    tog.className = "toggle " + (rec.work ? "on" : "off");
+    tog.textContent = rec.work ? "出勤" : "休み";
+    tog.addEventListener("click", () => {
+      rec.work = !rec.work;
+      if (!rec.work) rec.hours = 0;
+      saveState();
+      recalcAndRender();
+    });
+    cell.appendChild(tog);
+
+    const timeRow = document.createElement("div");
+    timeRow.className = "time-row";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "0.25";
+    input.min = "0";
+    input.placeholder = "勤務時間（h）";
+    input.value = rec.work ? String(rec.hours || "") : "";
+    input.disabled = !rec.work;
+
+    input.addEventListener("input", () => {
+      const v = Number(input.value);
+      rec.hours = isFinite(v) ? clamp(v, 0, 24) : 0;
+      saveState();
+      renderTotals();
+      renderYearSummary(); // 月途中でサマリーも更新
+    });
+
+    const help = document.createElement("span");
+    help.className = "help";
+    help.textContent = "0.25=15分 / 0.5=30分";
+
+    timeRow.appendChild(input);
+    timeRow.appendChild(help);
+    cell.appendChild(timeRow);
+
+    root.appendChild(cell);
+  }
+}
+
+function renderTotals() {
+  const ym = state.ui.ym;
+  const emp = currentEmployee();
+  const wage = Number(emp?.wage) || 0;
+  const monthData = (state.months[emp?.id || ""] || {})[ym] || {};
+
+  // 月合計
+  let sumHours = 0;
+  Object.values(monthData).forEach((r) => {
+    if (r.work) sumHours += Number(r.hours) || 0;
+  });
+  const sumWage = sumHours * wage;
+
+  // 年収見込み（モード）
+  const projMode = state.ui.projMode || "thismonth";
+  let projAnnual = 0;
+  if (projMode === "thismonth") {
+    projAnnual = sumWage * 12;
+  } else {
+    const [year, month] = ym.split("-").map(Number);
+    let ytdSum = 0;
+    let countedMonths = 0;
+    for (let m = 1; m <= month; m++) {
+      const ym2 = `${year}-${pad2(m)}`;
+      const md = ((state.months[emp?.id || ""] || {})[ym2]) || {};
+      let mh = 0;
+      Object.values(md).forEach(r => { if (r.work) mh += Number(r.hours) || 0; });
+      const mw = mh * wage;
+      if (mw > 0) { ytdSum += mw; countedMonths += 1; }
+    }
+    const avg = countedMonths > 0 ? (ytdSum / countedMonths) : 0;
+    const remain = 12 - month;
+    projAnnual = ytdSum + avg * remain;
+  }
+
+  $("#sum-hours").textContent = `${sumHours.toFixed(2)} h`;
+  $("#sum-wage").textContent = fmtJPY(sumWage);
+  $("#proj-annual").textContent = fmtJPY(projAnnual);
+
+  // 扶養ラインのバー（103/106/130）
+  const pct103 = THRESHOLDS.T103 ? Math.min(100, (projAnnual / THRESHOLDS.T103) * 100) : 0;
+  const pct106 = THRESHOLDS.T106 ? Math.min(100, (projAnnual / THRESHOLDS.T106) * 100) : 0;
+  const pct130 = THRESHOLDS.T130 ? Math.min(100, (projAnnual / THRESHOLDS.T130) * 100) : 0;
+  $("#bar-103").value = pct103; $("#pct-103").textContent = `${Math.round(pct103)}%`;
+  $("#bar-106").value = pct106; $("#pct-106").textContent = `${Math.round(pct106)}%`;
+  $("#bar-130").value = pct130; $("#pct-130").textContent = `${Math.round(pct130)}%`;
+
+  // 警告メッセージ
+  const msgs = [];
+  if (projAnnual >= THRESHOLDS.T130) msgs.push("130万円ラインを超える見込みです。");
+  else if (projAnnual >= THRESHOLDS.T130 * 0.9) msgs.push("130万円ラインの90%を超えています（要注意）。");
+
+  if (projAnnual >= THRESHOLDS.T106 && projAnnual < THRESHOLDS.T130) {
+    msgs.push("106万円ラインを超える可能性があります。条件により社会保険加入対象となる場合があります。");
+  } else if (projAnnual >= THRESHOLDS.T106 * 0.9 && projAnnual < THRESHOLDS.T106) {
+    msgs.push("106万円ラインの90%を超えています（要注意）。");
+  }
+
+  if (projAnnual >= THRESHOLDS.T103 && projAnnual < THRESHOLDS.T106) {
+    msgs.push("103万円ライン超の見込みです。");
+  } else if (projAnnual >= THRESHOLDS.T103 * 0.9 && projAnnual < THRESHOLDS.T103) {
+    msgs.push("103万円ラインの90%を超えています（要注意）。");
+  }
+
+  $("#warn").textContent = msgs.join(" ");
+
+  // シミュレーター連動
+  syncSimulatorWage();
+  recalcSimulator();
+}
+
+// ===== 扶養シミュレーター =====
+function onCapChange() {
+  const sel = $("#cap-select").value;
+  const custom = $("#cap-custom");
+  custom.disabled = sel !== "custom";
+  recalcSimulator();
+}
+function syncSimulatorWage() {
+  const wage = Number(currentEmployee()?.wage) || 0;
+  $("#cap-wage").value = wage || "";
+}
+function recalcSimulator() {
+  const sel = $("#cap-select").value;
+  const customYen = Number($("#cap-custom").value);
+  const wage = Number($("#cap-wage").value);
+
+  let cap = 0;
+  if (sel === "custom") {
+    cap = isFinite(customYen) && customYen > 0 ? customYen : 0;
+  } else {
+    cap = Number(sel) || 0;
+  }
+
+  let hours = "";
+  if (cap > 0 && wage > 0) {
+    const perMonth = cap / 12 / wage;
+    const rounded = Math.round(perMonth * 4) / 4; // 15分刻み
+    hours = `${rounded.toFixed(2)} h / 月`;
+  }
+  $("#cap-hours").value = hours;
+}
+
+// ===== 年間サマリー（各月×金額） =====
+function calcMonthWage(emp, year, month) {
+  const ym = `${year}-${pad2(month)}`;
+  const md = ((state.months[emp?.id || ""] || {})[ym]) || {};
+  let hours = 0;
+  Object.values(md).forEach(r => { if (r.work) hours += Number(r.hours) || 0; });
+  const wage = Number(emp?.wage) || 0;
+  return { hours, amount: hours * wage };
+}
+
+function renderYearSummary() {
+  const emp = currentEmployee();
+  const year = Number($("#year-picker").value) || getYearFromYM(state.ui.ym);
+
+  const tableWrap = $("#year-summary");
+  const months = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+  let html = `<table class="year-table"><thead><tr><th class="month">月</th>`;
+  months.forEach(m => html += `<th>${m}</th>`);
+  html += `<th>合計</th></tr></thead><tbody>`;
+
+  // 1行目：金額
+  html += `<tr><th class="month">金額</th>`;
+  let yearSum = 0;
+  for (let m = 1; m <= 12; m++) {
+    const { amount } = calcMonthWage(emp, year, m);
+    yearSum += amount;
+    html += `<td>${amount > 0 ? fmtJPY(amount) : "—"}</td>`;
+  }
+  html += `<td>${fmtJPY(yearSum)}</td></tr>`;
+
+  // 2行目：時間（参考）
+  html += `<tr><th class="month">時間(h)</th>`;
+  let yearHours = 0;
+  for (let m = 1; m <= 12; m++) {
+    const { hours } = calcMonthWage(emp, year, m);
+    yearHours += hours;
+    html += `<td>${hours > 0 ? hours.toFixed(2) : "—"}</td>`;
+  }
+  html += `<td>${yearHours.toFixed(2)}</td></tr>`;
+
+  html += `</tbody></table>`;
+  tableWrap.innerHTML = html;
+}
+
+// ===== 出力（CSV / Excel） =====
+function collectMonthRows(emp, ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const md = ((state.months[emp?.id || ""] || {})[ym]) || {};
+  const wage = Number(emp?.wage) || 0;
+  const dim = daysInMonth(ym);
+
+  const rows = [];
+  let sumH = 0, sumW = 0;
+
+  rows.push(["Staff", emp?.name || "", "Year-Month", ym, "Hourly", wage]);
+  rows.push(["Date","Weekday","Work","Hours","DayWage"]);
+
+  for (let d = 1; d <= dim; d++) {
+    const r = md[String(d)] || { work:false, hours:0 };
+    const hours = r.work ? (Number(r.hours) || 0) : 0;
+    const w = hours * wage;
+    rows.push([ ymd(ym, d), youbi(y, m, d), r.work ? "出勤" : "休み", hours, w ]);
+    sumH += hours; sumW += w;
+  }
+
+  // 見込み
+  const projMode = state.ui.projMode || "thismonth";
+  let projAnnual = 0;
+  if (projMode === "thismonth") projAnnual = sumW * 12;
+  else {
+    let ytdSum = 0, cnt = 0;
+    for (let mm = 1; mm <= m; mm++) {
+      const ym2 = `${y}-${pad2(mm)}`;
+      const md2 = ((state.months[emp?.id || ""] || {})[ym2]) || {};
+      let mh = 0;
+      Object.values(md2).forEach(r => { if (r.work) mh += Number(r.hours) || 0; });
+      const mw = mh * wage;
+      if (mw > 0) { ytdSum += mw; cnt++; }
+    }
+    const avg = cnt > 0 ? (ytdSum / cnt) : 0;
+    const remain = 12 - m;
+    projAnnual = ytdSum + avg * remain;
+  }
+
+  rows.push([]);
+  rows.push(["SumHours", sumH, "SumWage", sumW, "ProjectedAnnual", projAnnual, "Mode", projMode]);
+  return rows;
+}
+
+function download(filename, content, mime = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 0);
+}
+
+function exportCsvThisMonth() {
+  const emp = currentEmployee();
+  const ym = state.ui.ym;
+  const rows = collectMonthRows(emp, ym);
+
+  const BOM = "\uFEFF";
+  const csv = rows.map(r => r.map(v => {
+    const s = (v ?? "").toString();
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  }).join(",")).join("\n");
+  download(`${(emp?.name||"noname")}_${ym}.csv`, BOM + csv, "text/csv;charset=utf-8");
+}
+
+function exportCsvAll() {
+  const rows = [["Staff","Year-Month","Date","Weekday","Work","Hours","Hourly","DayWage"]];
+  state.employees.forEach(emp => {
+    const empMonths = state.months[emp.id] || {};
+    Object.keys(empMonths).sort().forEach(ym => {
+      const [y, m] = ym.split("-").map(Number);
+      const dim = daysInMonth(ym);
+      const wage = Number(emp.wage) || 0;
+      for (let d = 1; d <= dim; d++) {
+        const r = (empMonths[ym][String(d)]) || { work:false, hours:0 };
+        const hours = r.work ? (Number(r.hours) || 0) : 0;
+        const w = hours * wage;
+        rows.push([emp.name || "（無名）", ym, ymd(ym,d), youbi(y,m,d), r.work ? "出勤" : "休み", hours, wage, w]);
+      }
+    });
+  });
+
+  const BOM = "\uFEFF";
+  const csv = rows.map(r => r.map(v => {
+    const s = (v ?? "").toString();
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  }).join(",")).join("\n");
+  download(`all_staff_all_months.csv`, BOM + csv, "text/csv;charset=utf-8");
+}
+
+function exportXlsxThisMonth() {
+  if (typeof XLSX === "undefined") {
+    alert("Excel出力用ライブラリの読み込みに失敗しました。ネット接続をご確認ください。");
+    return;
+  }
+  const emp = currentEmployee();
+  const ym = state.ui.ym;
+  const rows = collectMonthRows(emp, ym);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{wch:12},{wch:6},{wch:6},{wch:8},{wch:12}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
+  XLSX.writeFile(wb, `${(emp?.name||"noname")}_${ym}.xlsx`);
+}
