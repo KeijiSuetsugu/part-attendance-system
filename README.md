@@ -1,7 +1,7 @@
 # パート出勤簿 & 扶養ライン見える化
 
 - **公開デモ**: https://keijisuetsugu.github.io/part-attendance-system/
-- **リポジトリ**: REPO_URL
+- **リポジトリ**: https://github.com/KeijiSuetsugu/part-attendance-system
 
 ## 概要
 ブラウザだけで動く出勤簿アプリです。スタッフごとのカレンダー入力、祝日自動反映、月次集計・年収見込み、扶養ライン（103/106/130万円）進捗、カスタム進捗バー、CSV/Excel出力などを備えています。データは **各ブラウザの localStorage にのみ保存** され、サーバー送信は行いません。
