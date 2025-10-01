@@ -109,6 +109,16 @@
           <p class="muted">※「空の出勤日のみに」は既に手入力した日を上書きしません。  
             ※「未出勤日は出勤にする」にチェックすると、休みの日も出勤化して時間を設定します。</p>
         </div>
+
+        <!-- 新規：前月→今月コピー -->
+        <div class="bulk-block">
+          <div class="bulk-title">前月の入力を今月へコピー</div>
+          <div class="bulk-actions">
+            <button id="copy-prev-fill" class="btn">空欄のみ埋める</button>
+            <button id="copy-prev-overwrite" class="btn btn-ghost">すべて上書き</button>
+          </div>
+          <p class="muted">※前月と今月の日数が異なる場合は、重なる日だけコピーします。</p>
+        </div>
       </div>
     </section>
 
