@@ -63,8 +63,10 @@ input[type="text"], input[type="number"], input[type="month"], select {
   min-height: 96px; display: flex; flex-direction: column; gap: 6px; min-width: 0; /* オーバーフロー抑止 */
 }
 .day-head { background: #fafafa; font-weight: 600; text-align: center; min-height: auto; }
-.day-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.day-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-weight: 600; }
 .badge { font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); background: #f9fafb; color: var(--muted); }
+.badge.holiday { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; } /* 祝日バッジ */
+
 .toggle {
   display: inline-block; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--ghost); cursor: pointer;
   text-align: center; user-select: none;
@@ -100,7 +102,7 @@ progress::-webkit-progress-value { border-radius: 999px; }
 .bulk-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .bulk-block { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; background: #fff; }
 .bulk-title { font-weight: 700; margin-bottom: 8px; }
-.bulk-actions { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+.bulk-actions { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; align-items: end; } /* 5列に拡張 */
 .checkline { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 
 @media (max-width: 920px) {
