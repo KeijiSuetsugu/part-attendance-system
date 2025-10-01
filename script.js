@@ -1,258 +1,188 @@
 // ===== 設定値 =====
-const THRESHOLDS = { T103: 1030000, T106: 1060000, T130: 1300000 };
-const STORAGE_KEY = "part_attendance_v2"; // v2構造
+var THRESHOLDS = { T103: 1030000, T106: 1060000, T130: 1300000 };
+var STORAGE_KEY = "part_attendance_v2"; // v2構造
 
 // ===== ユーティリティ =====
-const $ = (sel) => document.querySelector(sel);
-const fmtJPY = (n) => "¥" + Math.round(n).toLocaleString("ja-JP", { maximumFractionDigits: 0 });
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-const uid = () => "emp-" + Math.random().toString(36).slice(2, 9);
-const pad2 = (n) => String(n).padStart(2, "0");
-const ymd = (ym, d) => `${ym}-${pad2(d)}`;
-const youbi = (y, m, d) => ["日","月","火","水","木","金","土"][new Date(y, m-1, d).getDay()];
-const isWeekend = (y, m, d) => {
-  const w = new Date(y, m-1, d).getDay(); // 0=日,6=土
-  return w === 0 || w === 6;
-};
+function $(sel){ return document.querySelector(sel); }
+function fmtJPY(n){ return "¥" + Math.round(n).toLocaleString("ja-JP", { maximumFractionDigits: 0 }); }
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+function uid(){ return "emp-" + Math.random().toString(36).slice(2, 9); }
+function pad2(n){ return String(n).length===1 ? "0"+String(n) : String(n); }
+function ymd(ym, d){ return ym + "-" + pad2(d); }
+function youbi(y,m,d){ return ["日","月","火","水","木","金","土"][new Date(y, m-1, d).getDay()]; }
+function isWeekend(y,m,d){ var w = new Date(y, m-1, d).getDay(); return (w===0 || w===6); }
+
+// 安全にイベントをつけるヘルパ
+function onClick(id, handler){
+  var el = document.getElementById(id);
+  if (el) el.addEventListener("click", handler);
+}
 
 // ===== 状態（v2構造） =====
 // state = { employees:[{id,name,wage}], currentEmpId:"", months:{ [empId]:{ [ym]:{ "1":{work,hours}, ... } } }, ui:{ym:"YYYY-MM", projMode:"thismonth"} }
-let state = loadStateOrMigrate();
+var state = loadStateOrMigrate();
 
 // ==== 旧v1→v2 移行 ====
 function migrateV1ToV2(old) {
-  const firstId = uid();
-  const employees = [{ id: firstId, name: old.employee?.name || "", wage: old.employee?.wage || 0 }];
-  const months = { [firstId]: old.months || {} };
-  return {
-    employees,
-    currentEmpId: firstId,
-    months,
-    ui: { ym: old.ui?.ym || toYM(new Date()), projMode: "thismonth" },
-  };
+  var firstId = uid();
+  var employees = [{ id: firstId, name: (old.employee && old.employee.name) || "", wage: (old.employee && old.employee.wage) || 0 }];
+  var months = {}; months[firstId] = old.months || {};
+  return { employees: employees, currentEmpId: firstId, months: months, ui: { ym: (old.ui && old.ui.ym) || toYM(new Date()), projMode: "thismonth" } };
 }
 function loadStateOrMigrate() {
   try {
-    const raw2 = localStorage.getItem(STORAGE_KEY);
+    var raw2 = localStorage.getItem(STORAGE_KEY);
     if (raw2) return JSON.parse(raw2);
-  } catch {}
+  } catch(e){}
   try {
-    const raw1 = localStorage.getItem("part_attendance_v1");
+    var raw1 = localStorage.getItem("part_attendance_v1");
     if (raw1) {
-      const migrated = migrateV1ToV2(JSON.parse(raw1));
+      var migrated = migrateV1ToV2(JSON.parse(raw1));
       saveState(migrated);
       return migrated;
     }
-  } catch {}
-  const id = uid();
-  const fresh = {
-    employees: [{ id, name: "", wage: 0 }],
-    currentEmpId: id,
-    months: {},
-    ui: { ym: toYM(new Date()), projMode: "thismonth" },
-  };
+  } catch(e){}
+  var id = uid();
+  var fresh = { employees:[{ id:id, name:"", wage:0 }], currentEmpId:id, months:{}, ui:{ ym:toYM(new Date()), projMode:"thismonth" } };
   saveState(fresh);
   return fresh;
 }
-function saveState(s = state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-}
+function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s || state)); }
 
-function toYM(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+function toYM(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1); }
+function daysInMonth(ym){ var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]); return new Date(y, m, 0).getDate(); }
+function firstDow(ym){ var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]); return new Date(y, m-1, 1).getDay(); }
+function currentEmployee(){
+  var id = state.currentEmpId;
+  for (var i=0;i<state.employees.length;i++) if (state.employees[i].id===id) return state.employees[i];
+  return null;
 }
-function daysInMonth(ym) {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(y, m, 0).getDate();
-}
-function firstDow(ym) {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(y, m - 1, 1).getDay();
-}
-function currentEmployee() {
-  return state.employees.find(e => e.id === state.currentEmpId);
-}
-function ensureEmpMonth(empId, ym) {
-  state.months[empId] ||= {};
-  state.months[empId][ym] ||= {};
+function ensureEmpMonth(empId, ym){
+  if (!state.months[empId]) state.months[empId] = {};
+  if (!state.months[empId][ym]) state.months[empId][ym] = {};
   return state.months[empId][ym];
 }
-function getYearFromYM(ym) { return Number(ym.split("-")[0]); }
+function getYearFromYM(ym){ return Number(ym.split("-")[0]); }
 
 // ===== 初期化 =====
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function(){
   renderEmpTabs();
 
-  const emp = currentEmployee();
-  $("#emp-name").value = emp?.name || "";
-  $("#emp-wage").value = emp?.wage || "";
+  var emp = currentEmployee();
+  $("#emp-name").value = emp ? (emp.name || "") : "";
+  $("#emp-wage").value = emp ? (emp.wage || "") : "";
   $("#month-picker").value = state.ui.ym;
   $("#proj-mode").value = state.ui.projMode || "thismonth";
-  $("#year-picker").value = getYearFromYM(state.ui.ym);
+  var yp = $("#year-picker"); if (yp) yp.value = getYearFromYM(state.ui.ym);
 
   // 従業員情報
-  $("#save-emp").addEventListener("click", () => {
-    const e = currentEmployee();
-    if (!e) return;
-    e.name = $("#emp-name").value.trim();
+  onClick("save-emp", function(){
+    var e = currentEmployee(); if (!e) return;
+    e.name = ($("#emp-name").value || "").trim();
     e.wage = Number($("#emp-wage").value) || 0;
     $("#emp-msg").textContent = "従業員情報を保存しました。";
-    saveState();
-    recalcAndRender();
-    syncSimulatorWage();
-    renderYearSummary();
+    saveState(); recalcAndRender(); syncSimulatorWage(); renderYearSummary();
   });
 
-  $("#reset-data").addEventListener("click", () => {
-    if (confirm("保存データをすべて削除します。よろしいですか？")) {
-      localStorage.removeItem(STORAGE_KEY);
-      state = loadStateOrMigrate();
-      $("#emp-name").value = currentEmployee()?.name || "";
-      $("#emp-wage").value = currentEmployee()?.wage || "";
-      $("#emp-msg").textContent = "データを初期化しました。";
-      $("#month-picker").value = state.ui.ym;
-      $("#proj-mode").value = state.ui.projMode;
-      $("#year-picker").value = getYearFromYM(state.ui.ym);
-      renderEmpTabs();
-      recalcAndRender();
-      syncSimulatorWage();
-      renderYearSummary();
-      updateBulkRangeLimits();
-    }
+  onClick("reset-data", function(){
+    if (!confirm("保存データをすべて削除します。よろしいですか？")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    state = loadStateOrMigrate();
+    var cur = currentEmployee();
+    $("#emp-name").value = cur ? (cur.name || "") : "";
+    $("#emp-wage").value = cur ? (cur.wage || "") : "";
+    $("#emp-msg").textContent = "データを初期化しました。";
+    $("#month-picker").value = state.ui.ym;
+    $("#proj-mode").value = state.ui.projMode;
+    if (yp) yp.value = getYearFromYM(state.ui.ym);
+    renderEmpTabs(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateBulkRangeLimits();
   });
 
   // 月選択
-  $("#prev-month").addEventListener("click", () => {
-    const [y, m] = state.ui.ym.split("-").map(Number);
-    const d = new Date(y, m - 1, 1);
-    d.setMonth(d.getMonth() - 1);
-    state.ui.ym = toYM(d);
-    $("#month-picker").value = state.ui.ym;
-    $("#year-picker").value = getYearFromYM(state.ui.ym);
-    saveState();
-    recalcAndRender();
-    renderYearSummary();
-    updateBulkRangeLimits();
+  onClick("prev-month", function(){
+    var sp = state.ui.ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
+    var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()-1);
+    state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
+    saveState(); recalcAndRender(); renderYearSummary(); updateBulkRangeLimits();
   });
-  $("#next-month").addEventListener("click", () => {
-    const [y, m] = state.ui.ym.split("-").map(Number);
-    const d = new Date(y, m - 1, 1);
-    d.setMonth(d.getMonth() + 1);
-    state.ui.ym = toYM(d);
-    $("#month-picker").value = state.ui.ym;
-    $("#year-picker").value = getYearFromYM(state.ui.ym);
-    saveState();
-    recalcAndRender();
-    renderYearSummary();
-    updateBulkRangeLimits();
+  onClick("next-month", function(){
+    var sp = state.ui.ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
+    var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()+1);
+    state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
+    saveState(); recalcAndRender(); renderYearSummary(); updateBulkRangeLimits();
   });
-  $("#month-picker").addEventListener("change", (e) => {
-    state.ui.ym = e.target.value;
-    $("#year-picker").value = getYearFromYM(state.ui.ym);
-    saveState();
-    recalcAndRender();
-    renderYearSummary();
-    updateBulkRangeLimits();
+  var mp = $("#month-picker");
+  if (mp) mp.addEventListener("change", function(e){
+    state.ui.ym = e.target.value; if (yp) yp.value = getYearFromYM(state.ui.ym);
+    saveState(); recalcAndRender(); renderYearSummary(); updateBulkRangeLimits();
   });
 
   // スタッフ追加 / 削除 / 並び替え
-  $("#add-emp").addEventListener("click", () => {
-    const name = prompt("スタッフ名を入力してください");
-    if (!name) return;
-    const wageStr = prompt("時給（円）を入力してください（例：1200）");
-    const wage = Number(wageStr);
-    const id = uid();
-    state.employees.push({ id, name: name.trim(), wage: isFinite(wage) ? wage : 0 });
-    state.currentEmpId = id;
-    saveState();
-    renderEmpTabs();
-    $("#emp-name").value = name.trim();
-    $("#emp-wage").value = isFinite(wage) ? wage : 0;
+  onClick("add-emp", function(){
+    var name = prompt("スタッフ名を入力してください"); if (!name) return;
+    var wageStr = prompt("時給（円）を入力してください（例：1200）"); var wage = Number(wageStr);
+    var id = uid(); state.employees.push({ id:id, name:name.trim(), wage: isFinite(wage)?wage:0 });
+    state.currentEmpId = id; saveState(); renderEmpTabs();
+    $("#emp-name").value = name.trim(); $("#emp-wage").value = isFinite(wage)?wage:0;
     $("#emp-msg").textContent = "新しいスタッフを追加しました。";
-    recalcAndRender();
-    syncSimulatorWage();
-    renderYearSummary();
+    recalcAndRender(); syncSimulatorWage(); renderYearSummary();
   });
 
-  $("#del-emp").addEventListener("click", () => {
-    if (!currentEmployee()) return;
-    const e = currentEmployee();
-    if (!confirm(`「${e.name || "（無名）"}」を削除します。よろしいですか？`)) return;
+  onClick("del-emp", function(){
+    var e = currentEmployee(); if (!e) return;
+    if (!confirm("「" + (e.name || "（無名）") + "」を削除します。よろしいですか？")) return;
+    var idx = -1; for (var i=0;i<state.employees.length;i++){ if (state.employees[i].id===e.id){ idx=i; break; } }
+    if (idx>=0) state.employees.splice(idx,1);
+    if (state.months[e.id]) delete state.months[e.id];
 
-    const idx = state.employees.findIndex(x => x.id === e.id);
-    if (idx >= 0) state.employees.splice(idx, 1);
-    delete state.months[e.id];
-
-    if (state.employees.length === 0) {
-      const id = uid();
-      state.employees.push({ id, name: "", wage: 0 });
-      state.currentEmpId = id;
+    if (state.employees.length===0){
+      var id = uid(); state.employees.push({id:id, name:"", wage:0}); state.currentEmpId = id;
     } else {
-      const next = state.employees[Math.max(0, idx - 1)];
-      state.currentEmpId = next.id;
+      var next = state.employees[Math.max(0, idx-1)]; state.currentEmpId = next.id;
     }
-    saveState();
-    renderEmpTabs();
-    const cur = currentEmployee();
-    $("#emp-name").value = cur?.name || "";
-    $("#emp-wage").value = cur?.wage || "";
+    saveState(); renderEmpTabs();
+    var cur = currentEmployee(); $("#emp-name").value = cur ? (cur.name||"") : ""; $("#emp-wage").value = cur ? (cur.wage||0) : 0;
     $("#emp-msg").textContent = "スタッフを削除しました。";
-    recalcAndRender();
-    syncSimulatorWage();
-    renderYearSummary();
+    recalcAndRender(); syncSimulatorWage(); renderYearSummary();
   });
 
-  $("#move-left").addEventListener("click", () => {
-    const id = state.currentEmpId;
-    const idx = state.employees.findIndex(e => e.id === id);
-    if (idx > 0) {
-      const tmp = state.employees[idx - 1];
-      state.employees[idx - 1] = state.employees[idx];
-      state.employees[idx] = tmp;
-      saveState();
-      renderEmpTabs();
-    }
+  onClick("move-left", function(){
+    var id = state.currentEmpId, idx=-1; for (var i=0;i<state.employees.length;i++){ if(state.employees[i].id===id){idx=i;break;} }
+    if (idx>0){ var t = state.employees[idx-1]; state.employees[idx-1]=state.employees[idx]; state.employees[idx]=t; saveState(); renderEmpTabs(); }
   });
-  $("#move-right").addEventListener("click", () => {
-    const id = state.currentEmpId;
-    const idx = state.employees.findIndex(e => e.id === id);
-    if (idx >= 0 && idx < state.employees.length - 1) {
-      const tmp = state.employees[idx + 1];
-      state.employees[idx + 1] = state.employees[idx];
-      state.employees[idx] = tmp;
-      saveState();
-      renderEmpTabs();
-    }
+  onClick("move-right", function(){
+    var id = state.currentEmpId, idx=-1; for (var i=0;i<state.employees.length;i++){ if(state.employees[i].id===id){idx=i;break;} }
+    if (idx>=0 && idx<state.employees.length-1){ var t = state.employees[idx+1]; state.employees[idx+1]=state.employees[idx]; state.employees[idx]=t; saveState(); renderEmpTabs(); }
   });
 
-  // 見込みモード切替
-  $("#proj-mode").addEventListener("change", (e) => {
-    state.ui.projMode = e.target.value;
-    saveState();
-    recalcAndRender();
-  });
+  var pm = $("#proj-mode");
+  if (pm) pm.addEventListener("change", function(e){ state.ui.projMode = e.target.value; saveState(); recalcAndRender(); });
 
   // 扶養シミュレーター
-  $("#cap-select").addEventListener("change", onCapChange);
-  $("#cap-custom").addEventListener("input", recalcSimulator);
-  syncSimulatorWage();
-  onCapChange();
+  var capSel = $("#cap-select"), capCust = $("#cap-custom");
+  if (capSel) capSel.addEventListener("change", onCapChange);
+  if (capCust) capCust.addEventListener("input", recalcSimulator);
+  syncSimulatorWage(); onCapChange();
 
   // 年間サマリー
-  $("#year-picker").addEventListener("change", renderYearSummary);
-  $("#refresh-summary").addEventListener("click", renderYearSummary);
+  var yrPick = $("#year-picker");
+  if (yrPick) yrPick.addEventListener("change", renderYearSummary);
+  onClick("refresh-summary", renderYearSummary);
 
   // 一括操作（出勤/休み）
-  $("#bulk-work-all").addEventListener("click", bulkWorkAll);
-  $("#bulk-off-all").addEventListener("click", bulkOffAll);
-  $("#bulk-weekdays-work").addEventListener("click", bulkWeekdaysWork);
-  $("#bulk-weekends-off").addEventListener("click", bulkWeekendsOff);
+  onClick("bulk-work-all", bulkWorkAll);
+  onClick("bulk-off-all", bulkOffAll);
+  onClick("bulk-weekdays-work", bulkWeekdaysWork);
+  onClick("bulk-weekends-off", bulkWeekendsOff);
 
   // 一括操作（時間）
-  $("#bulk-scope").addEventListener("change", onBulkScopeChange);
-  $("#bulk-apply-hours").addEventListener("click", bulkApplyHours);
+  var bulkScope = $("#bulk-scope"); if (bulkScope) bulkScope.addEventListener("change", onBulkScopeChange);
+  onClick("bulk-apply-hours", bulkApplyHours);
+
+  // 出力
+  onClick("export-csv-month", exportCsvThisMonth);
+  onClick("export-csv-all", exportCsvAll);
+  onClick("export-xlsx-month", exportXlsxThisMonth);
 
   // 初期描画
   recalcAndRender();
@@ -262,26 +192,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ===== タブ描画 =====
 function renderEmpTabs() {
-  const wrap = $("#emp-tabs");
+  var wrap = $("#emp-tabs"); if (!wrap) return;
   wrap.innerHTML = "";
-  state.employees.forEach(e => {
-    const b = document.createElement("button");
-    b.className = "tab" + (e.id === state.currentEmpId ? " active" : "");
-    b.textContent = e.name || "（無名）";
-    b.title = `${e.name || "（無名）"} / 時給: ${e.wage ?? 0}円`;
-    b.addEventListener("click", () => {
-      state.currentEmpId = e.id;
-      saveState();
-      $("#emp-name").value = e.name || "";
-      $("#emp-wage").value = e.wage || 0;
-      $("#emp-msg").textContent = "";
-      recalcAndRender();
-      syncSimulatorWage();
-      renderYearSummary();
-      renderEmpTabs();
-    });
-    wrap.appendChild(b);
-  });
+  for (var i=0;i<state.employees.length;i++){
+    (function(e){
+      var b = document.createElement("button");
+      b.className = "tab" + (e.id===state.currentEmpId ? " active" : "");
+      b.textContent = e.name || "（無名）";
+      b.title = (e.name || "（無名）") + " / 時給: " + ((e.wage!=null?e.wage:0) + "円");
+      b.addEventListener("click", function(){
+        state.currentEmpId = e.id; saveState();
+        $("#emp-name").value = e.name || ""; $("#emp-wage").value = e.wage || 0; $("#emp-msg").textContent = "";
+        recalcAndRender(); syncSimulatorWage(); renderYearSummary(); renderEmpTabs();
+      });
+      wrap.appendChild(b);
+    })(state.employees[i]);
+  }
 }
 
 // ===== レンダリング（カレンダー・集計） =====
@@ -291,435 +217,349 @@ function recalcAndRender() {
 }
 
 function renderCalendar() {
-  const ym = state.ui.ym;
-  const empId = state.currentEmpId;
-  const root = $("#calendar");
+  var ym = state.ui.ym, empId = state.currentEmpId;
+  var root = $("#calendar"); if (!root) return;
   root.innerHTML = "";
 
-  ["日","月","火","水","木","金","土"].forEach((h) => {
-    const el = document.createElement("div");
-    el.className = "day-head";
-    el.textContent = h;
+  ["日","月","火","水","木","金","土"].forEach(function(h){
+    var el = document.createElement("div");
+    el.className = "day-head"; el.textContent = h;
     root.appendChild(el);
   });
 
-  const dow = firstDow(ym);
-  const dim = daysInMonth(ym);
-  const monthData = ensureEmpMonth(empId, ym);
+  var dow = firstDow(ym), dim = daysInMonth(ym);
+  var monthData = ensureEmpMonth(empId, ym);
 
-  for (let i = 0; i < dow; i++) {
-    const empty = document.createElement("div");
-    empty.className = "day-cell";
-    empty.style.visibility = "hidden";
-    root.appendChild(empty);
-  }
+  for (var i=0;i<dow;i++){ var empty=document.createElement("div"); empty.className="day-cell"; empty.style.visibility="hidden"; root.appendChild(empty); }
 
-  for (let day = 1; day <= dim; day++) {
-    const key = String(day);
-    const rec = (monthData[key] ||= { work: false, hours: 0 });
+  for (var day=1; day<=dim; day++){
+    var key = String(day);
+    if (!monthData[key]) monthData[key] = { work:false, hours:0 };
+    var rec = monthData[key];
 
-    const cell = document.createElement("div");
-    cell.className = "day-cell";
+    var cell = document.createElement("div"); cell.className = "day-cell";
 
-    const title = document.createElement("div");
-    title.className = "day-title";
-    const badge = document.createElement("span");
-    badge.className = "badge";
-    badge.textContent = ym;
-    title.innerHTML = `<span>${day}日</span>`;
-    title.appendChild(badge);
-    cell.appendChild(title);
+    var title = document.createElement("div"); title.className = "day-title";
+    var badge = document.createElement("span"); badge.className = "badge"; badge.textContent = ym;
+    title.innerHTML = "<span>"+day+"日</span>"; title.appendChild(badge); cell.appendChild(title);
 
-    const tog = document.createElement("div");
+    var tog = document.createElement("div");
     tog.className = "toggle " + (rec.work ? "on" : "off");
     tog.textContent = rec.work ? "出勤" : "休み";
-    tog.addEventListener("click", () => {
-      rec.work = !rec.work;
-      if (!rec.work) rec.hours = 0;
-      saveState();
-      recalcAndRender();
-    });
+    tog.addEventListener("click", function(recRef){
+      return function(){
+        recRef.work = !recRef.work; if (!recRef.work) recRef.hours = 0;
+        saveState(); recalcAndRender();
+      };
+    }(rec));
     cell.appendChild(tog);
 
-    const timeRow = document.createElement("div");
-    timeRow.className = "time-row";
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "0.25";
-    input.min = "0";
-    input.placeholder = "勤務時間（h）";
-    input.value = rec.work ? String(rec.hours || "") : "";
-    input.disabled = !rec.work;
+    var timeRow = document.createElement("div"); timeRow.className = "time-row";
+    var input = document.createElement("input"); input.type="number"; input.step="0.25"; input.min="0"; input.placeholder="勤務時間（h）";
+    input.value = rec.work ? String(rec.hours || "") : ""; input.disabled = !rec.work;
+    input.addEventListener("input", function(recRef, inputRef){
+      return function(){
+        var v = Number(inputRef.value); recRef.hours = isFinite(v) ? clamp(v,0,24) : 0;
+        saveState(); renderTotals(); renderYearSummary();
+      };
+    }(rec, input));
 
-    input.addEventListener("input", () => {
-      const v = Number(input.value);
-      rec.hours = isFinite(v) ? clamp(v, 0, 24) : 0;
-      saveState();
-      renderTotals();
-      renderYearSummary();
-    });
-
-    const help = document.createElement("span");
-    help.className = "help";
-    help.textContent = "0.25=15分 / 0.5=30分";
-
-    timeRow.appendChild(input);
-    timeRow.appendChild(help);
-    cell.appendChild(timeRow);
+    var help = document.createElement("span"); help.className = "help"; help.textContent = "0.25=15分 / 0.5=30分";
+    timeRow.appendChild(input); timeRow.appendChild(help); cell.appendChild(timeRow);
 
     root.appendChild(cell);
   }
 }
 
 function renderTotals() {
-  const ym = state.ui.ym;
-  const emp = currentEmployee();
-  const wage = Number(emp?.wage) || 0;
-  const monthData = (state.months[emp?.id || ""] || {})[ym] || {};
+  var ym = state.ui.ym, emp = currentEmployee();
+  var wage = emp ? Number(emp.wage) || 0 : 0;
+  var empId = emp ? emp.id : "";
+  var mdAll = state.months[empId] || {};
+  var monthData = mdAll[ym] || {};
 
-  // 月合計
-  let sumHours = 0;
-  Object.values(monthData).forEach((r) => {
-    if (r.work) sumHours += Number(r.hours) || 0;
-  });
-  const sumWage = sumHours * wage;
+  var sumHours = 0;
+  var keys = Object.keys(monthData);
+  for (var i=0;i<keys.length;i++){ var r = monthData[keys[i]]; if (r && r.work) sumHours += Number(r.hours)||0; }
+  var sumWage = sumHours * wage;
 
-  // 年収見込み（モード）
-  const projMode = state.ui.projMode || "thismonth";
-  let projAnnual = 0;
+  // 年収見込み
+  var projMode = state.ui.projMode || "thismonth";
+  var projAnnual = 0;
   if (projMode === "thismonth") {
     projAnnual = sumWage * 12;
   } else {
-    const [year, month] = ym.split("-").map(Number);
-    let ytdSum = 0;
-    let countedMonths = 0;
-    for (let m = 1; m <= month; m++) {
-      const ym2 = `${year}-${pad2(m)}`;
-      const md = ((state.months[emp?.id || ""] || {})[ym2]) || {};
-      let mh = 0;
-      Object.values(md).forEach(r => { if (r.work) mh += Number(r.hours) || 0; });
-      const mw = mh * wage;
-      if (mw > 0) { ytdSum += mw; countedMonths += 1; }
+    var sp = ym.split("-"); var year = Number(sp[0]), month = Number(sp[1]);
+    var ytdSum = 0, countedMonths = 0;
+    for (var m=1;m<=month;m++){
+      var ym2 = year + "-" + pad2(m);
+      var md2 = (mdAll[ym2]) || {};
+      var mh = 0; var k2 = Object.keys(md2);
+      for (var j=0;j<k2.length;j++){ var rr = md2[k2[j]]; if (rr && rr.work) mh += Number(rr.hours)||0; }
+      var mw = mh * wage;
+      if (mw > 0){ ytdSum += mw; countedMonths++; }
     }
-    const avg = countedMonths > 0 ? (ytdSum / countedMonths) : 0;
-    const remain = 12 - month;
+    var avg = countedMonths>0 ? (ytdSum / countedMonths) : 0;
+    var remain = 12 - month;
     projAnnual = ytdSum + avg * remain;
   }
 
-  $("#sum-hours").textContent = `${sumHours.toFixed(2)} h`;
+  $("#sum-hours").textContent = sumHours.toFixed(2) + " h";
   $("#sum-wage").textContent = fmtJPY(sumWage);
   $("#proj-annual").textContent = fmtJPY(projAnnual);
 
-  // 扶養ラインのバー（103/106/130）
-  const pct103 = THRESHOLDS.T103 ? Math.min(100, (projAnnual / THRESHOLDS.T103) * 100) : 0;
-  const pct106 = THRESHOLDS.T106 ? Math.min(100, (projAnnual / THRESHOLDS.T106) * 100) : 0;
-  const pct130 = THRESHOLDS.T130 ? Math.min(100, (projAnnual / THRESHOLDS.T130) * 100) : 0;
-  $("#bar-103").value = pct103; $("#pct-103").textContent = `${Math.round(pct103)}%`;
-  $("#bar-106").value = pct106; $("#pct-106").textContent = `${Math.round(pct106)}%`;
-  $("#bar-130").value = pct130; $("#pct-130").textContent = `${Math.round(pct130)}%`;
+  // バー
+  var pct103 = THRESHOLDS.T103 ? Math.min(100, (projAnnual/THRESHOLDS.T103)*100) : 0;
+  var pct106 = THRESHOLDS.T106 ? Math.min(100, (projAnnual/THRESHOLDS.T106)*100) : 0;
+  var pct130 = THRESHOLDS.T130 ? Math.min(100, (projAnnual/THRESHOLDS.T130)*100) : 0;
+  var b103=$("#bar-103"), p103=$("#pct-103"); if(b103){ b103.value=pct103; } if(p103){ p103.textContent = Math.round(pct103)+"%"; }
+  var b106=$("#bar-106"), p106=$("#pct-106"); if(b106){ b106.value=pct106; } if(p106){ p106.textContent = Math.round(pct106)+"%"; }
+  var b130=$("#bar-130"), p130=$("#pct-130"); if(b130){ b130.value=pct130; } if(p130){ p130.textContent = Math.round(pct130)+"%"; }
 
-  // 警告メッセージ
-  const msgs = [];
+  // 注意
+  var msgs = [];
   if (projAnnual >= THRESHOLDS.T130) msgs.push("130万円ラインを超える見込みです。");
-  else if (projAnnual >= THRESHOLDS.T130 * 0.9) msgs.push("130万円ラインの90%を超えています（要注意）。");
+  else if (projAnnual >= THRESHOLDS.T130*0.9) msgs.push("130万円ラインの90%を超えています（要注意）。");
 
-  if (projAnnual >= THRESHOLDS.T106 && projAnnual < THRESHOLDS.T130) {
-    msgs.push("106万円ラインを超える可能性があります。条件により社会保険加入対象となる場合があります。");
-  } else if (projAnnual >= THRESHOLDS.T106 * 0.9 && projAnnual < THRESHOLDS.T106) {
-    msgs.push("106万円ラインの90%を超えています（要注意）。");
-  }
+  if (projAnnual >= THRESHOLDS.T106 && projAnnual < THRESHOLDS.T130) msgs.push("106万円ラインを超える可能性があります。条件により社会保険加入対象となる場合があります。");
+  else if (projAnnual >= THRESHOLDS.T106*0.9 && projAnnual < THRESHOLDS.T106) msgs.push("106万円ラインの90%を超えています（要注意）。");
 
-  if (projAnnual >= THRESHOLDS.T103 && projAnnual < THRESHOLDS.T106) {
-    msgs.push("103万円ライン超の見込みです。");
-  } else if (projAnnual >= THRESHOLDS.T103 * 0.9 && projAnnual < THRESHOLDS.T103) {
-    msgs.push("103万円ラインの90%を超えています（要注意）。");
-  }
+  if (projAnnual >= THRESHOLDS.T103 && projAnnual < THRESHOLDS.T106) msgs.push("103万円ライン超の見込みです。");
+  else if (projAnnual >= THRESHOLDS.T103*0.9 && projAnnual < THRESHOLDS.T103) msgs.push("103万円ラインの90%を超えています（要注意）。");
 
-  $("#warn").textContent = msgs.join(" ");
+  var warn=$("#warn"); if (warn) warn.textContent = msgs.join(" ");
 
-  // シミュレーター連動
+  // シミュレーター
   syncSimulatorWage();
   recalcSimulator();
 }
 
 // ===== 扶養シミュレーター =====
-function onCapChange() {
-  const sel = $("#cap-select").value;
-  const custom = $("#cap-custom");
-  custom.disabled = sel !== "custom";
+function onCapChange(){
+  var sel = $("#cap-select"); var custom=$("#cap-custom");
+  if (!sel || !custom) return;
+  var v = sel.value;
+  custom.disabled = (v !== "custom");
   recalcSimulator();
 }
-function syncSimulatorWage() {
-  const wage = Number(currentEmployee()?.wage) || 0;
-  $("#cap-wage").value = wage || "";
+function syncSimulatorWage(){
+  var wage = 0; var emp = currentEmployee(); if (emp) wage = Number(emp.wage)||0;
+  var w = $("#cap-wage"); if (w) w.value = wage || "";
 }
-function recalcSimulator() {
-  const sel = $("#cap-select").value;
-  const customYen = Number($("#cap-custom").value);
-  const wage = Number($("#cap-wage").value);
+function recalcSimulator(){
+  var selEl = $("#cap-select"), custEl=$("#cap-custom"), wageEl=$("#cap-wage"), out=$("#cap-hours");
+  if (!selEl || !wageEl || !out) return;
+  var sel = selEl.value;
+  var customYen = custEl ? Number(custEl.value) : 0;
+  var wage = Number(wageEl.value);
 
-  let cap = 0;
-  if (sel === "custom") {
-    cap = isFinite(customYen) && customYen > 0 ? customYen : 0;
-  } else {
-    cap = Number(sel) || 0;
-  }
+  var cap = 0;
+  if (sel==="custom") cap = (isFinite(customYen) && customYen>0) ? customYen : 0;
+  else cap = Number(sel)||0;
 
-  let hours = "";
-  if (cap > 0 && wage > 0) {
-    const perMonth = cap / 12 / wage;
-    const rounded = Math.round(perMonth * 4) / 4; // 15分刻み
-    hours = `${rounded.toFixed(2)} h / 月`;
+  var hours = "";
+  if (cap>0 && wage>0){
+    var perMonth = cap/12/wage;
+    var rounded = Math.round(perMonth*4)/4;
+    hours = rounded.toFixed(2) + " h / 月";
   }
-  $("#cap-hours").value = hours;
+  out.value = hours;
 }
 
-// ===== 年間サマリー（各月×金額） =====
-function calcMonthWage(emp, year, month) {
-  const ym = `${year}-${pad2(month)}`;
-  const md = ((state.months[emp?.id || ""] || {})[ym]) || {};
-  let hours = 0;
-  Object.values(md).forEach(r => { if (r.work) hours += Number(r.hours) || 0; });
-  const wage = Number(emp?.wage) || 0;
-  return { hours, amount: hours * wage };
+// ===== 年間サマリー =====
+function calcMonthWage(emp, year, month){
+  var ym = year + "-" + pad2(month);
+  var mdAll = state.months[emp ? emp.id : ""] || {};
+  var md = mdAll[ym] || {};
+  var hours = 0; var ks = Object.keys(md);
+  for (var i=0;i<ks.length;i++){ var r = md[ks[i]]; if (r && r.work) hours += Number(r.hours)||0; }
+  var wage = emp ? Number(emp.wage)||0 : 0;
+  return { hours:hours, amount: hours*wage };
 }
-function renderYearSummary() {
-  const emp = currentEmployee();
-  const year = Number($("#year-picker").value) || getYearFromYM(state.ui.ym);
+function renderYearSummary(){
+  var tableWrap = $("#year-summary"); if (!tableWrap) return;
+  var emp = currentEmployee();
+  var yrEl = $("#year-picker"); var year = yrEl ? (Number(yrEl.value)||getYearFromYM(state.ui.ym)) : getYearFromYM(state.ui.ym);
+  var months = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+  var html = '<table class="year-table"><thead><tr><th class="month">月</th>';
+  for (var i=0;i<months.length;i++) html += "<th>"+months[i]+"</th>";
+  html += "<th>合計</th></tr></thead><tbody>";
 
-  const tableWrap = $("#year-summary");
-  const months = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
-  let html = `<table class="year-table"><thead><tr><th class="month">月</th>`;
-  months.forEach(m => html += `<th>${m}</th>`);
-  html += `<th>合計</th></tr></thead><tbody>`;
+  // 金額行
+  html += '<tr><th class="month">金額</th>';
+  var yearSum = 0;
+  for (var m=1;m<=12;m++){ var a = calcMonthWage(emp, year, m).amount; yearSum += a; html += "<td>"+(a>0?fmtJPY(a):"—")+"</td>"; }
+  html += "<td>"+fmtJPY(yearSum)+"</td></tr>";
 
-  // 1行目：金額
-  html += `<tr><th class="month">金額</th>`;
-  let yearSum = 0;
-  for (let m = 1; m <= 12; m++) {
-    const { amount } = calcMonthWage(emp, year, m);
-    yearSum += amount;
-    html += `<td>${amount > 0 ? fmtJPY(amount) : "—"}</td>`;
-  }
-  html += `<td>${fmtJPY(yearSum)}</td></tr>`;
+  // 時間行
+  html += '<tr><th class="month">時間(h)</th>';
+  var yearHours = 0;
+  for (var mm=1;mm<=12;mm++){ var h = calcMonthWage(emp, year, mm).hours; yearHours += h; html += "<td>"+(h>0?h.toFixed(2):"—")+"</td>"; }
+  html += "<td>"+yearHours.toFixed(2)+"</td></tr>";
 
-  // 2行目：時間（参考）
-  html += `<tr><th class="month">時間(h)</th>`;
-  let yearHours = 0;
-  for (let m = 1; m <= 12; m++) {
-    const { hours } = calcMonthWage(emp, year, m);
-    yearHours += hours;
-    html += `<td>${hours > 0 ? hours.toFixed(2) : "—"}</td>`;
-  }
-  html += `<td>${yearHours.toFixed(2)}</td></tr>`;
-
-  html += `</tbody></table>`;
+  html += "</tbody></table>";
   tableWrap.innerHTML = html;
 }
 
 // ===== 出力（CSV / Excel） =====
-function collectMonthRows(emp, ym) {
-  const [y, m] = ym.split("-").map(Number);
-  const md = ((state.months[emp?.id || ""] || {})[ym]) || {};
-  const wage = Number(emp?.wage) || 0;
-  const dim = daysInMonth(ym);
+function collectMonthRows(emp, ym){
+  var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
+  var mdAll = state.months[emp ? emp.id : ""] || {};
+  var md = mdAll[ym] || {};
+  var wage = emp ? Number(emp.wage)||0 : 0;
+  var dim = daysInMonth(ym);
 
-  const rows = [];
-  let sumH = 0, sumW = 0;
-
-  rows.push(["Staff", emp?.name || "", "Year-Month", ym, "Hourly", wage]);
+  var rows = []; var sumH=0, sumW=0;
+  rows.push(["Staff", (emp?emp.name:"") || "", "Year-Month", ym, "Hourly", wage]);
   rows.push(["Date","Weekday","Work","Hours","DayWage"]);
 
-  for (let d = 1; d <= dim; d++) {
-    const r = md[String(d)] || { work:false, hours:0 };
-    const hours = r.work ? (Number(r.hours) || 0) : 0;
-    const w = hours * wage;
-    rows.push([ ymd(ym, d), youbi(y, m, d), r.work ? "出勤" : "休み", hours, w ]);
+  for (var d=1; d<=dim; d++){
+    var r = md[String(d)] || { work:false, hours:0 };
+    var hours = r.work ? (Number(r.hours)||0) : 0;
+    var w = hours * wage;
+    rows.push([ ymd(ym,d), youbi(y,m,d), r.work ? "出勤" : "休み", hours, w ]);
     sumH += hours; sumW += w;
   }
 
-  // 見込み
-  const projMode = state.ui.projMode || "thismonth";
-  let projAnnual = 0;
-  if (projMode === "thismonth") projAnnual = sumW * 12;
+  var projMode = state.ui.projMode || "thismonth";
+  var projAnnual = 0;
+  if (projMode==="thismonth") projAnnual = sumW * 12;
   else {
-    let ytdSum = 0, cnt = 0;
-    for (let mm = 1; mm <= m; mm++) {
-      const ym2 = `${y}-${pad2(mm)}`;
-      const md2 = ((state.months[emp?.id || ""] || {})[ym2]) || {};
-      let mh = 0;
-      Object.values(md2).forEach(r => { if (r.work) mh += Number(r.hours) || 0; });
-      const mw = mh * wage;
-      if (mw > 0) { ytdSum += mw; cnt++; }
+    var ytdSum=0, cnt=0;
+    for (var mm=1; mm<=m; mm++){
+      var ym2 = y + "-" + pad2(mm);
+      var md2 = mdAll[ym2] || {};
+      var mh = 0; var ks = Object.keys(md2);
+      for (var k=0;k<ks.length;k++){ var rr = md2[ks[k]]; if (rr && rr.work) mh += Number(rr.hours)||0; }
+      var mw = mh * wage;
+      if (mw>0){ ytdSum += mw; cnt++; }
     }
-    const avg = cnt > 0 ? (ytdSum / cnt) : 0;
-    const remain = 12 - m;
-    projAnnual = ytdSum + avg * remain;
+    var avg = cnt>0 ? (ytdSum/cnt) : 0; var remain = 12 - m;
+    projAnnual = ytdSum + avg*remain;
   }
 
   rows.push([]);
   rows.push(["SumHours", sumH, "SumWage", sumW, "ProjectedAnnual", projAnnual, "Mode", projMode]);
   return rows;
 }
-function download(filename, content, mime = "text/plain;charset=utf-8") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
+function download(filename, content, mime){
+  if (!mime) mime = "text/plain;charset=utf-8";
+  var blob = new Blob([content], { type: mime });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href = url; a.download = filename;
   document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 0);
+  setTimeout(function(){ URL.revokeObjectURL(url); document.body.removeChild(a); }, 0);
 }
-function exportCsvThisMonth() {
-  const emp = currentEmployee();
-  const ym = state.ui.ym;
-  const rows = collectMonthRows(emp, ym);
-  const BOM = "\uFEFF";
-  const csv = rows.map(r => r.map(v => {
-    const s = (v ?? "").toString();
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
-    return s;
-  }).join(",")).join("\n");
-  download(`${(emp?.name||"noname")}_${ym}.csv`, BOM + csv, "text/csv;charset=utf-8");
+function exportCsvThisMonth(){
+  var emp = currentEmployee(); var ym = state.ui.ym; var rows = collectMonthRows(emp, ym);
+  var BOM = "\uFEFF";
+  var csv = rows.map(function(r){ return r.map(function(v){
+    var s = (v==null?"":String(v));
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(","); }).join("\n");
+  download(((emp&&emp.name)||"noname")+"_"+ym+".csv", BOM+csv, "text/csv;charset=utf-8");
 }
-function exportCsvAll() {
-  const rows = [["Staff","Year-Month","Date","Weekday","Work","Hours","Hourly","DayWage"]];
-  state.employees.forEach(emp => {
-    const empMonths = state.months[emp.id] || {};
-    Object.keys(empMonths).sort().forEach(ym => {
-      const [y, m] = ym.split("-").map(Number);
-      const dim = daysInMonth(ym);
-      const wage = Number(emp.wage) || 0;
-      for (let d = 1; d <= dim; d++) {
-        const r = (empMonths[ym][String(d)]) || { work:false, hours:0 };
-        const hours = r.work ? (Number(r.hours) || 0) : 0;
-        const w = hours * wage;
-        rows.push([emp.name || "（無名）", ym, ymd(ym,d), youbi(y,m,d), r.work ? "出勤" : "休み", hours, wage, w]);
+function exportCsvAll(){
+  var rows = [["Staff","Year-Month","Date","Weekday","Work","Hours","Hourly","DayWage"]];
+  for (var i=0;i<state.employees.length;i++){
+    var emp = state.employees[i];
+    var empMonths = state.months[emp.id] || {};
+    var yms = Object.keys(empMonths).sort();
+    for (var j=0;j<yms.length;j++){
+      var ym = yms[j]; var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
+      var dim = daysInMonth(ym); var wage = Number(emp.wage)||0;
+      for (var d=1; d<=dim; d++){
+        var r = (empMonths[ym][String(d)]) || { work:false, hours:0 };
+        var hours = r.work ? (Number(r.hours)||0) : 0; var w = hours*wage;
+        rows.push([emp.name||"（無名）", ym, ymd(ym,d), youbi(y,m,d), r.work?"出勤":"休み", hours, wage, w]);
       }
-    });
-  });
-  const BOM = "\uFEFF";
-  const csv = rows.map(r => r.map(v => {
-    const s = (v ?? "").toString();
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
-    return s;
-  }).join(",")).join("\n");
-  download(`all_staff_all_months.csv`, BOM + csv, "text/csv;charset=utf-8");
-}
-function exportXlsxThisMonth() {
-  if (typeof XLSX === "undefined") {
-    alert("Excel出力用ライブラリの読み込みに失敗しました。ネット接続をご確認ください。");
-    return;
+    }
   }
-  const emp = currentEmployee();
-  const ym = state.ui.ym;
-  const rows = collectMonthRows(emp, ym);
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+  var BOM = "\uFEFF";
+  var csv = rows.map(function(r){ return r.map(function(v){
+    var s = (v==null?"":String(v));
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(","); }).join("\n");
+  download("all_staff_all_months.csv", BOM+csv, "text/csv;charset=utf-8");
+}
+function exportXlsxThisMonth(){
+  if (typeof XLSX === "undefined"){ alert("Excel出力用ライブラリの読み込みに失敗しました。ネット接続をご確認ください。"); return; }
+  var emp = currentEmployee(); var ym = state.ui.ym; var rows = collectMonthRows(emp, ym);
+  var ws = XLSX.utils.aoa_to_sheet(rows);
   ws["!cols"] = [{wch:12},{wch:6},{wch:6},{wch:8},{wch:12}];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
-  XLSX.writeFile(wb, `${(emp?.name||"noname")}_${ym}.xlsx`);
+  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
+  XLSX.writeFile(wb, (((emp&&emp.name)||"noname")+"_"+ym+".xlsx"));
 }
 
-// ===== 一括操作のロジック =====
-function onBulkScopeChange() {
-  const scope = $("#bulk-scope").value;
-  const rangeEnabled = scope === "date_range_overwrite";
-  $("#bulk-from").disabled = !rangeEnabled;
-  $("#bulk-to").disabled = !rangeEnabled;
+// ===== 一括操作（出勤/休み & 時間） =====
+function onBulkScopeChange(){
+  var scope = $("#bulk-scope"); if (!scope) return;
+  var rangeEnabled = scope.value === "date_range_overwrite";
+  var from = $("#bulk-from"), to = $("#bulk-to");
+  if (from) from.disabled = !rangeEnabled;
+  if (to) to.disabled = !rangeEnabled;
 }
-function updateBulkRangeLimits() {
-  const dim = daysInMonth(state.ui.ym);
-  const from = $("#bulk-from"), to = $("#bulk-to");
-  from.min = 1; from.max = dim; to.min = 1; to.max = dim;
-  if (!from.value) from.value = 1;
-  if (!to.value) to.value = dim;
+function updateBulkRangeLimits(){
+  var dim = daysInMonth(state.ui.ym);
+  var from = $("#bulk-from"), to = $("#bulk-to");
+  if (from){ from.min=1; from.max=dim; if (!from.value) from.value=1; }
+  if (to){ to.min=1; to.max=dim; if (!to.value) to.value=dim; }
 }
 
-function bulkWorkAll() {
-  const ym = state.ui.ym;
-  const empId = state.currentEmpId;
-  const md = ensureEmpMonth(empId, ym);
-  const dim = daysInMonth(ym);
-  for (let d = 1; d <= dim; d++) {
-    const rec = (md[String(d)] ||= { work:false, hours:0 });
-    rec.work = true; // 時間は維持（必要なら後で一括時間設定）
-  }
+function bulkWorkAll(){
+  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
+  for (var d=1; d<=dim; d++){ if (!md[String(d)]) md[String(d)]={work:false,hours:0}; md[String(d)].work=true; }
   saveState(); recalcAndRender(); renderYearSummary();
 }
-function bulkOffAll() {
-  const ym = state.ui.ym;
-  const empId = state.currentEmpId;
-  const md = ensureEmpMonth(empId, ym);
-  const dim = daysInMonth(ym);
-  for (let d = 1; d <= dim; d++) {
-    const rec = (md[String(d)] ||= { work:false, hours:0 });
-    rec.work = false; rec.hours = 0;
-  }
+function bulkOffAll(){
+  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
+  for (var d=1; d<=dim; d++){ if (!md[String(d)]) md[String(d)]={work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; }
   saveState(); recalcAndRender(); renderYearSummary();
 }
-function bulkWeekdaysWork() {
-  const ym = state.ui.ym; const [y,m] = ym.split("-").map(Number);
-  const empId = state.currentEmpId; const md = ensureEmpMonth(empId, ym);
-  const dim = daysInMonth(ym);
-  for (let d = 1; d <= dim; d++) {
-    if (!isWeekend(y,m,d)) {
-      const rec = (md[String(d)] ||= { work:false, hours:0 });
-      rec.work = true;
-    }
-  }
+function bulkWeekdaysWork(){
+  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
+  var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
+  for (var d=1; d<=dim; d++){ if (!isWeekend(y,m,d)){ if (!md[String(d)]) md[String(d)]={work:false,hours:0}; md[String(d)].work=true; } }
   saveState(); recalcAndRender(); renderYearSummary();
 }
-function bulkWeekendsOff() {
-  const ym = state.ui.ym; const [y,m] = ym.split("-").map(Number);
-  const empId = state.currentEmpId; const md = ensureEmpMonth(empId, ym);
-  const dim = daysInMonth(ym);
-  for (let d = 1; d <= dim; d++) {
-    if (isWeekend(y,m,d)) {
-      const rec = (md[String(d)] ||= { work:false, hours:0 });
-      rec.work = false; rec.hours = 0;
-    }
-  }
+function bulkWeekendsOff(){
+  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
+  var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
+  for (var d=1; d<=dim; d++){ if (isWeekend(y,m,d)){ if (!md[String(d)]) md[String(d)]={work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; } }
   saveState(); recalcAndRender(); renderYearSummary();
 }
-function bulkApplyHours() {
-  const ym = state.ui.ym; const [y,m] = ym.split("-").map(Number);
-  const empId = state.currentEmpId; const md = ensureEmpMonth(empId, ym);
-  const dim = daysInMonth(ym);
 
-  let hours = Number($("#bulk-hours").value);
-  if (!isFinite(hours) || hours < 0) { alert("時間を正しく入力してください（例：7.5）"); return; }
-  hours = clamp(Math.round(hours * 4) / 4, 0, 24); // 15分刻み
+function bulkApplyHours(){
+  var ym = state.ui.ym, sp=ym.split("-"), y=Number(sp[0]), m=Number(sp[1]);
+  var empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
 
-  const scope = $("#bulk-scope").value;
-  const markWork = $("#bulk-mark-work").checked;
-  let from = Number($("#bulk-from").value) || 1;
-  let to = Number($("#bulk-to").value) || dim;
-  if (from > to) { const t = from; from = to; to = t; }
-  from = clamp(from, 1, dim); to = clamp(to, 1, dim);
+  var hours = Number(($("#bulk-hours") && $("#bulk-hours").value) || "");
+  if (!isFinite(hours) || hours<0){ alert("時間を正しく入力してください（例：7.5）"); return; }
+  hours = clamp(Math.round(hours*4)/4, 0, 24);
 
-  const applyToDay = (d) => {
-    const rec = (md[String(d)] ||= { work:false, hours:0 });
-    // スコープ判定
-    const weekday = !isWeekend(y,m,d);
-    let inScope = false;
-    if (scope === "all_working_overwrite") {
-      inScope = rec.work || markWork;
-    } else if (scope === "working_empty_only") {
-      inScope = (rec.work || markWork) && (!rec.hours || rec.hours === 0);
-    } else if (scope === "weekdays_overwrite") {
-      inScope = weekday && (rec.work || markWork);
-    } else if (scope === "weekends_overwrite") {
-      inScope = !weekday && (rec.work || markWork);
-    } else if (scope === "date_range_overwrite") {
-      inScope = d >= from && d <= to && (rec.work || markWork);
-    }
-    if (!inScope) return;
+  var scopeEl = $("#bulk-scope"); var scope = scopeEl? scopeEl.value : "all_working_overwrite";
+  var markWork = ($("#bulk-mark-work") && $("#bulk-mark-work").checked) ? true : false;
+  var from = Number(($("#bulk-from") && $("#bulk-from").value) || 1);
+  var to = Number(($("#bulk-to") && $("#bulk-to").value) || dim);
+  if (from>to){ var t=from; from=to; to=t; }
+  from = clamp(from,1,dim); to = clamp(to,1,dim);
 
-    if (markWork) rec.work = true; // 必要なら出勤化
-    if (rec.work) rec.hours = hours; // 出勤日のみ時間反映
-  };
+  for (var d=1; d<=dim; d++){
+    if (!md[String(d)]) md[String(d)] = { work:false, hours:0 };
+    var rec = md[String(d)];
+    var weekday = !isWeekend(y,m,d);
+    var inScope = false;
 
-  for (let d = 1; d <= dim; d++) applyToDay(d);
+    if (scope==="all_working_overwrite") inScope = (rec.work || markWork);
+    else if (scope==="working_empty_only") inScope = (rec.work || markWork) && (!rec.hours || rec.hours===0);
+    else if (scope==="weekdays_overwrite") inScope = weekday && (rec.work || markWork);
+    else if (scope==="weekends_overwrite") inScope = !weekday && (rec.work || markWork);
+    else if (scope==="date_range_overwrite") inScope = (d>=from && d<=to) && (rec.work || markWork);
+
+    if (!inScope) continue;
+    if (markWork) rec.work = true;
+    if (rec.work) rec.hours = hours;
+  }
 
   saveState(); recalcAndRender(); renderYearSummary();
 }
