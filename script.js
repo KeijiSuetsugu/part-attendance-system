@@ -10,6 +10,10 @@ const uid = () => "emp-" + Math.random().toString(36).slice(2, 9);
 const pad2 = (n) => String(n).padStart(2, "0");
 const ymd = (ym, d) => `${ym}-${pad2(d)}`;
 const youbi = (y, m, d) => ["日","月","火","水","木","金","土"][new Date(y, m-1, d).getDay()];
+const isWeekend = (y, m, d) => {
+  const w = new Date(y, m-1, d).getDay(); // 0=日,6=土
+  return w === 0 || w === 6;
+};
 
 // ===== 状態（v2構造） =====
 // state = { employees:[{id,name,wage}], currentEmpId:"", months:{ [empId]:{ [ym]:{ "1":{work,hours}, ... } } }, ui:{ym:"YYYY-MM", projMode:"thismonth"} }
@@ -75,9 +79,7 @@ function ensureEmpMonth(empId, ym) {
   state.months[empId][ym] ||= {};
   return state.months[empId][ym];
 }
-function getYearFromYM(ym) {
-  return Number(ym.split("-")[0]);
-}
+function getYearFromYM(ym) { return Number(ym.split("-")[0]); }
 
 // ===== 初期化 =====
 document.addEventListener("DOMContentLoaded", () => {
@@ -90,6 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#proj-mode").value = state.ui.projMode || "thismonth";
   $("#year-picker").value = getYearFromYM(state.ui.ym);
 
+  // 従業員情報
   $("#save-emp").addEventListener("click", () => {
     const e = currentEmployee();
     if (!e) return;
@@ -116,9 +119,11 @@ document.addEventListener("DOMContentLoaded", () => {
       recalcAndRender();
       syncSimulatorWage();
       renderYearSummary();
+      updateBulkRangeLimits();
     }
   });
 
+  // 月選択
   $("#prev-month").addEventListener("click", () => {
     const [y, m] = state.ui.ym.split("-").map(Number);
     const d = new Date(y, m - 1, 1);
@@ -129,6 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
     recalcAndRender();
     renderYearSummary();
+    updateBulkRangeLimits();
   });
   $("#next-month").addEventListener("click", () => {
     const [y, m] = state.ui.ym.split("-").map(Number);
@@ -140,6 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
     recalcAndRender();
     renderYearSummary();
+    updateBulkRangeLimits();
   });
   $("#month-picker").addEventListener("change", (e) => {
     state.ui.ym = e.target.value;
@@ -147,6 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
     recalcAndRender();
     renderYearSummary();
+    updateBulkRangeLimits();
   });
 
   // スタッフ追加 / 削除 / 並び替え
@@ -236,14 +244,20 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#year-picker").addEventListener("change", renderYearSummary);
   $("#refresh-summary").addEventListener("click", renderYearSummary);
 
-  // 出力
-  $("#export-csv-month").addEventListener("click", exportCsvThisMonth);
-  $("#export-csv-all").addEventListener("click", exportCsvAll);
-  $("#export-xlsx-month").addEventListener("click", exportXlsxThisMonth);
+  // 一括操作（出勤/休み）
+  $("#bulk-work-all").addEventListener("click", bulkWorkAll);
+  $("#bulk-off-all").addEventListener("click", bulkOffAll);
+  $("#bulk-weekdays-work").addEventListener("click", bulkWeekdaysWork);
+  $("#bulk-weekends-off").addEventListener("click", bulkWeekendsOff);
+
+  // 一括操作（時間）
+  $("#bulk-scope").addEventListener("change", onBulkScopeChange);
+  $("#bulk-apply-hours").addEventListener("click", bulkApplyHours);
 
   // 初期描画
   recalcAndRender();
   renderYearSummary();
+  updateBulkRangeLimits();
 });
 
 // ===== タブ描画 =====
@@ -342,7 +356,7 @@ function renderCalendar() {
       rec.hours = isFinite(v) ? clamp(v, 0, 24) : 0;
       saveState();
       renderTotals();
-      renderYearSummary(); // 月途中でサマリーも更新
+      renderYearSummary();
     });
 
     const help = document.createElement("span");
@@ -469,7 +483,6 @@ function calcMonthWage(emp, year, month) {
   const wage = Number(emp?.wage) || 0;
   return { hours, amount: hours * wage };
 }
-
 function renderYearSummary() {
   const emp = currentEmployee();
   const year = Number($("#year-picker").value) || getYearFromYM(state.ui.ym);
@@ -548,7 +561,6 @@ function collectMonthRows(emp, ym) {
   rows.push(["SumHours", sumH, "SumWage", sumW, "ProjectedAnnual", projAnnual, "Mode", projMode]);
   return rows;
 }
-
 function download(filename, content, mime = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -557,12 +569,10 @@ function download(filename, content, mime = "text/plain;charset=utf-8") {
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 0);
 }
-
 function exportCsvThisMonth() {
   const emp = currentEmployee();
   const ym = state.ui.ym;
   const rows = collectMonthRows(emp, ym);
-
   const BOM = "\uFEFF";
   const csv = rows.map(r => r.map(v => {
     const s = (v ?? "").toString();
@@ -571,7 +581,6 @@ function exportCsvThisMonth() {
   }).join(",")).join("\n");
   download(`${(emp?.name||"noname")}_${ym}.csv`, BOM + csv, "text/csv;charset=utf-8");
 }
-
 function exportCsvAll() {
   const rows = [["Staff","Year-Month","Date","Weekday","Work","Hours","Hourly","DayWage"]];
   state.employees.forEach(emp => {
@@ -588,7 +597,6 @@ function exportCsvAll() {
       }
     });
   });
-
   const BOM = "\uFEFF";
   const csv = rows.map(r => r.map(v => {
     const s = (v ?? "").toString();
@@ -597,7 +605,6 @@ function exportCsvAll() {
   }).join(",")).join("\n");
   download(`all_staff_all_months.csv`, BOM + csv, "text/csv;charset=utf-8");
 }
-
 function exportXlsxThisMonth() {
   if (typeof XLSX === "undefined") {
     alert("Excel出力用ライブラリの読み込みに失敗しました。ネット接続をご確認ください。");
@@ -606,11 +613,113 @@ function exportXlsxThisMonth() {
   const emp = currentEmployee();
   const ym = state.ui.ym;
   const rows = collectMonthRows(emp, ym);
-
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws["!cols"] = [{wch:12},{wch:6},{wch:6},{wch:8},{wch:12}];
-
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
   XLSX.writeFile(wb, `${(emp?.name||"noname")}_${ym}.xlsx`);
+}
+
+// ===== 一括操作のロジック =====
+function onBulkScopeChange() {
+  const scope = $("#bulk-scope").value;
+  const rangeEnabled = scope === "date_range_overwrite";
+  $("#bulk-from").disabled = !rangeEnabled;
+  $("#bulk-to").disabled = !rangeEnabled;
+}
+function updateBulkRangeLimits() {
+  const dim = daysInMonth(state.ui.ym);
+  const from = $("#bulk-from"), to = $("#bulk-to");
+  from.min = 1; from.max = dim; to.min = 1; to.max = dim;
+  if (!from.value) from.value = 1;
+  if (!to.value) to.value = dim;
+}
+
+function bulkWorkAll() {
+  const ym = state.ui.ym;
+  const empId = state.currentEmpId;
+  const md = ensureEmpMonth(empId, ym);
+  const dim = daysInMonth(ym);
+  for (let d = 1; d <= dim; d++) {
+    const rec = (md[String(d)] ||= { work:false, hours:0 });
+    rec.work = true; // 時間は維持（必要なら後で一括時間設定）
+  }
+  saveState(); recalcAndRender(); renderYearSummary();
+}
+function bulkOffAll() {
+  const ym = state.ui.ym;
+  const empId = state.currentEmpId;
+  const md = ensureEmpMonth(empId, ym);
+  const dim = daysInMonth(ym);
+  for (let d = 1; d <= dim; d++) {
+    const rec = (md[String(d)] ||= { work:false, hours:0 });
+    rec.work = false; rec.hours = 0;
+  }
+  saveState(); recalcAndRender(); renderYearSummary();
+}
+function bulkWeekdaysWork() {
+  const ym = state.ui.ym; const [y,m] = ym.split("-").map(Number);
+  const empId = state.currentEmpId; const md = ensureEmpMonth(empId, ym);
+  const dim = daysInMonth(ym);
+  for (let d = 1; d <= dim; d++) {
+    if (!isWeekend(y,m,d)) {
+      const rec = (md[String(d)] ||= { work:false, hours:0 });
+      rec.work = true;
+    }
+  }
+  saveState(); recalcAndRender(); renderYearSummary();
+}
+function bulkWeekendsOff() {
+  const ym = state.ui.ym; const [y,m] = ym.split("-").map(Number);
+  const empId = state.currentEmpId; const md = ensureEmpMonth(empId, ym);
+  const dim = daysInMonth(ym);
+  for (let d = 1; d <= dim; d++) {
+    if (isWeekend(y,m,d)) {
+      const rec = (md[String(d)] ||= { work:false, hours:0 });
+      rec.work = false; rec.hours = 0;
+    }
+  }
+  saveState(); recalcAndRender(); renderYearSummary();
+}
+function bulkApplyHours() {
+  const ym = state.ui.ym; const [y,m] = ym.split("-").map(Number);
+  const empId = state.currentEmpId; const md = ensureEmpMonth(empId, ym);
+  const dim = daysInMonth(ym);
+
+  let hours = Number($("#bulk-hours").value);
+  if (!isFinite(hours) || hours < 0) { alert("時間を正しく入力してください（例：7.5）"); return; }
+  hours = clamp(Math.round(hours * 4) / 4, 0, 24); // 15分刻み
+
+  const scope = $("#bulk-scope").value;
+  const markWork = $("#bulk-mark-work").checked;
+  let from = Number($("#bulk-from").value) || 1;
+  let to = Number($("#bulk-to").value) || dim;
+  if (from > to) { const t = from; from = to; to = t; }
+  from = clamp(from, 1, dim); to = clamp(to, 1, dim);
+
+  const applyToDay = (d) => {
+    const rec = (md[String(d)] ||= { work:false, hours:0 });
+    // スコープ判定
+    const weekday = !isWeekend(y,m,d);
+    let inScope = false;
+    if (scope === "all_working_overwrite") {
+      inScope = rec.work || markWork;
+    } else if (scope === "working_empty_only") {
+      inScope = (rec.work || markWork) && (!rec.hours || rec.hours === 0);
+    } else if (scope === "weekdays_overwrite") {
+      inScope = weekday && (rec.work || markWork);
+    } else if (scope === "weekends_overwrite") {
+      inScope = !weekday && (rec.work || markWork);
+    } else if (scope === "date_range_overwrite") {
+      inScope = d >= from && d <= to && (rec.work || markWork);
+    }
+    if (!inScope) return;
+
+    if (markWork) rec.work = true; // 必要なら出勤化
+    if (rec.work) rec.hours = hours; // 出勤日のみ時間反映
+  };
+
+  for (let d = 1; d <= dim; d++) applyToDay(d);
+
+  saveState(); recalcAndRender(); renderYearSummary();
 }
