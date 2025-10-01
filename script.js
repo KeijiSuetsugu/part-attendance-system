@@ -2,6 +2,10 @@
 var THRESHOLDS = { T103: 1030000, T106: 1060000, T130: 1300000 };
 var STORAGE_KEY = "part_attendance_v2"; // v2構造
 
+// 祝日キャッシュ（ローカル保存）
+var HOLIDAY_CACHE_KEY = "holiday_cache_v1";
+var HOLIDAY_TTL_DAYS = 30; // 30日で更新
+
 // ===== ユーティリティ =====
 function $(sel){ return document.querySelector(sel); }
 function fmtJPY(n){ return "¥" + Math.round(n).toLocaleString("ja-JP", { maximumFractionDigits: 0 }); }
@@ -11,11 +15,90 @@ function pad2(n){ return String(n).length===1 ? "0"+String(n) : String(n); }
 function ymd(ym, d){ return ym + "-" + pad2(d); }
 function youbi(y,m,d){ return ["日","月","火","水","木","金","土"][new Date(y, m-1, d).getDay()]; }
 function isWeekend(y,m,d){ var w = new Date(y, m-1, d).getDay(); return (w===0 || w===6); }
+function getYearFromYM(ym){ return Number(ym.split("-")[0]); }
+function toYM(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1); }
 
 // 安全にイベントをつけるヘルパ
 function onClick(id, handler){
   var el = document.getElementById(id);
   if (el) el.addEventListener("click", handler);
+}
+
+// ===== 祝日キャッシュ管理 =====
+var holidayCache = loadHolidayCache();
+function loadHolidayCache(){
+  try {
+    var raw = localStorage.getItem(HOLIDAY_CACHE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return { years:{}, updated:{}, source:"" };
+}
+function saveHolidayCache(){
+  localStorage.setItem(HOLIDAY_CACHE_KEY, JSON.stringify(holidayCache));
+}
+function updateHolidayStatus(year, loaded, source){
+  var el = $("#holiday-status"); if (!el) return;
+  if (loaded) el.textContent = "祝日データ：" + year + " 取得済（" + (source==="holidays-jp"?"holidays-jp":"Nager.Date") + "）";
+  else el.textContent = "祝日データ：" + year + " を取得できませんでした（オフライン？）";
+}
+function ensureHolidaysForYear(year, callback){
+  if (!holidayCache || !holidayCache.years) holidayCache = { years:{}, updated:{}, source:"" };
+  var now = Date.now();
+  var ystr = String(year);
+  var have = holidayCache.years[ystr];
+  var ts = holidayCache.updated ? holidayCache.updated[ystr] : null;
+  var fresh = false;
+  if (have && ts){
+    var ageDays = (now - ts)/86400000;
+    if (ageDays < HOLIDAY_TTL_DAYS) fresh = true;
+  }
+  if (fresh){ updateHolidayStatus(year, true, holidayCache.source||"holidays-jp"); if (callback) callback(); return; }
+
+  // 1) holidays-jp（年別のJSON）→ 2) Nager.Date にフォールバック
+  fetchHolidaysJP(year, function(map, src){
+    holidayCache.years[ystr] = map; if (!holidayCache.updated) holidayCache.updated = {};
+    holidayCache.updated[ystr] = Date.now(); holidayCache.source = src; saveHolidayCache();
+    updateHolidayStatus(year, true, src);
+    if (callback) callback();
+  }, function(){
+    fetchNagerJP(year, function(map, src){
+      holidayCache.years[ystr] = map; if (!holidayCache.updated) holidayCache.updated = {};
+      holidayCache.updated[ystr] = Date.now(); holidayCache.source = src; saveHolidayCache();
+      updateHolidayStatus(year, true, src);
+      if (callback) callback();
+    }, function(){
+      updateHolidayStatus(year, false, "");
+      if (callback) callback();
+    });
+  });
+}
+function fetchHolidaysJP(year, success, fail){
+  var url = "https://holidays-jp.github.io/api/v1/" + year + "/date.json";
+  fetch(url, { cache: "no-store" })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(json){ success(json, "holidays-jp"); })
+    .catch(function(e){ if (fail) fail(e); });
+}
+function fetchNagerJP(year, success, fail){
+  var url = "https://date.nager.at/api/v3/PublicHolidays/" + year + "/JP";
+  fetch(url, { cache: "no-store" })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(list){
+      var map = {};
+      for (var i=0;i<list.length;i++){
+        var it = list[i]; // {date:"YYYY-MM-DD", localName:"元日", ...}
+        map[it.date] = it.localName || it.name || "祝日";
+      }
+      success(map, "nager");
+    })
+    .catch(function(e){ if (fail) fail(e); });
+}
+function getHolidayNameByDate(ym, d){
+  var y = String(getYearFromYM(ym));
+  var map = holidayCache && holidayCache.years ? holidayCache.years[y] : null;
+  if (!map) return "";
+  var key = ymd(ym, d);
+  return map[key] || "";
 }
 
 // ===== 状態（v2構造） =====
@@ -49,7 +132,6 @@ function loadStateOrMigrate() {
 }
 function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s || state)); }
 
-function toYM(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1); }
 function daysInMonth(ym){ var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]); return new Date(y, m, 0).getDate(); }
 function firstDow(ym){ var sp=ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]); return new Date(y, m-1, 1).getDay(); }
 function currentEmployee(){
@@ -62,7 +144,6 @@ function ensureEmpMonth(empId, ym){
   if (!state.months[empId][ym]) state.months[empId][ym] = {};
   return state.months[empId][ym];
 }
-function getYearFromYM(ym){ return Number(ym.split("-")[0]); }
 
 // ===== 初期化 =====
 document.addEventListener("DOMContentLoaded", function(){
@@ -103,18 +184,18 @@ document.addEventListener("DOMContentLoaded", function(){
     var sp = state.ui.ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
     var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()-1);
     state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); recalcAndRender(); renderYearSummary(); updateBulkRangeLimits();
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); });
   });
   onClick("next-month", function(){
     var sp = state.ui.ym.split("-"); var y=Number(sp[0]), m=Number(sp[1]);
     var d = new Date(y, m-1, 1); d.setMonth(d.getMonth()+1);
     state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); recalcAndRender(); renderYearSummary(); updateBulkRangeLimits();
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); });
   });
   var mp = $("#month-picker");
   if (mp) mp.addEventListener("change", function(e){
     state.ui.ym = e.target.value; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); recalcAndRender(); renderYearSummary(); updateBulkRangeLimits();
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); });
   });
 
   // スタッフ追加 / 削除 / 並び替え
@@ -174,12 +255,13 @@ document.addEventListener("DOMContentLoaded", function(){
   onClick("bulk-off-all", bulkOffAll);
   onClick("bulk-weekdays-work", bulkWeekdaysWork);
   onClick("bulk-weekends-off", bulkWeekendsOff);
+  onClick("bulk-holidays-off", bulkHolidaysOff); // 新規：祝日を休みに
 
   // 一括操作（時間）
   var bulkScope = $("#bulk-scope"); if (bulkScope) bulkScope.addEventListener("change", onBulkScopeChange);
   onClick("bulk-apply-hours", bulkApplyHours);
 
-  // 前月コピー（新規）
+  // 前月コピー
   onClick("copy-prev-fill", function(){ copyPrevMonth(false); });
   onClick("copy-prev-overwrite", function(){ 
     if (confirm("前月の内容で今月をすべて上書きします。よろしいですか？")) copyPrevMonth(true);
@@ -190,10 +272,12 @@ document.addEventListener("DOMContentLoaded", function(){
   onClick("export-csv-all", exportCsvAll);
   onClick("export-xlsx-month", exportXlsxThisMonth);
 
-  // 初期描画
-  recalcAndRender();
-  renderYearSummary();
-  updateBulkRangeLimits();
+  // 初期描画：まず祝日データを確保してから描画
+  ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){
+    recalcAndRender();
+    renderYearSummary();
+    updateBulkRangeLimits();
+  });
 });
 
 // ===== タブ描画 =====
@@ -235,6 +319,7 @@ function renderCalendar() {
 
   var dow = firstDow(ym), dim = daysInMonth(ym);
   var monthData = ensureEmpMonth(empId, ym);
+  var y = getYearFromYM(ym), m = Number(ym.split("-")[1]);
 
   for (var i=0;i<dow;i++){ var empty=document.createElement("div"); empty.className="day-cell"; empty.style.visibility="hidden"; root.appendChild(empty); }
 
@@ -247,7 +332,21 @@ function renderCalendar() {
 
     var title = document.createElement("div"); title.className = "day-title";
     var badge = document.createElement("span"); badge.className = "badge"; badge.textContent = ym;
-    title.innerHTML = "<span>"+day+"日</span>"; title.appendChild(badge); cell.appendChild(title);
+    title.innerHTML = "<span>"+day+"日</span>"; title.appendChild(badge);
+
+    // 祝日バッジ
+    var hname = getHolidayNameByDate(ym, day);
+    if (hname){
+      var hbadge = document.createElement("span");
+      hbadge.className = "badge holiday";
+      hbadge.textContent = hname;
+      title.appendChild(hbadge);
+      // まだ未入力なら休みにしておく（手入力は上書きしない）
+      if (!rec.work && (!rec.hours || Number(rec.hours)===0)){
+        rec.work = false; rec.hours = 0;
+      }
+    }
+    cell.appendChild(title);
 
     var tog = document.createElement("div");
     tog.className = "toggle " + (rec.work ? "on" : "off");
@@ -417,13 +516,15 @@ function collectMonthRows(emp, ym){
 
   var rows = []; var sumH=0, sumW=0;
   rows.push(["Staff", (emp?emp.name:"") || "", "Year-Month", ym, "Hourly", wage]);
-  rows.push(["Date","Weekday","Work","Hours","DayWage"]);
+  // 祝日名列を追加
+  rows.push(["Date","Weekday","HolidayName","Work","Hours","DayWage"]);
 
   for (var d=1; d<=dim; d++){
     var r = md[String(d)] || { work:false, hours:0 };
     var hours = r.work ? (Number(r.hours)||0) : 0;
     var w = hours * wage;
-    rows.push([ ymd(ym,d), youbi(y,m,d), r.work ? "出勤" : "休み", hours, w ]);
+    var hname = getHolidayNameByDate(ym, d);
+    rows.push([ ymd(ym,d), youbi(y,m,d), hname || "", r.work ? "出勤" : "休み", hours, w ]);
     sumH += hours; sumW += w;
   }
 
@@ -466,7 +567,7 @@ function exportCsvThisMonth(){
   download(((emp&&emp.name)||"noname")+"_"+ym+".csv", BOM+csv, "text/csv;charset=utf-8");
 }
 function exportCsvAll(){
-  var rows = [["Staff","Year-Month","Date","Weekday","Work","Hours","Hourly","DayWage"]];
+  var rows = [["Staff","Year-Month","Date","Weekday","HolidayName","Work","Hours","Hourly","DayWage"]];
   for (var i=0;i<state.employees.length;i++){
     var emp = state.employees[i];
     var empMonths = state.months[emp.id] || {};
@@ -477,7 +578,8 @@ function exportCsvAll(){
       for (var d=1; d<=dim; d++){
         var r = (empMonths[ym][String(d)]) || { work:false, hours:0 };
         var hours = r.work ? (Number(r.hours)||0) : 0; var w = hours*wage;
-        rows.push([emp.name||"（無名）", ym, ymd(ym,d), youbi(y,m,d), r.work?"出勤":"休み", hours, wage, w]);
+        var hname = getHolidayNameByDate(ym, d);
+        rows.push([emp.name||"（無名）", ym, ymd(ym,d), youbi(y,m,d), hname || "", r.work?"出勤":"休み", hours, wage, w]);
       }
     }
   }
@@ -492,7 +594,7 @@ function exportXlsxThisMonth(){
   if (typeof XLSX === "undefined"){ alert("Excel出力用ライブラリの読み込みに失敗しました。ネット接続をご確認ください。"); return; }
   var emp = currentEmployee(); var ym = state.ui.ym; var rows = collectMonthRows(emp, ym);
   var ws = XLSX.utils.aoa_to_sheet(rows);
-  ws["!cols"] = [{wch:12},{wch:6},{wch:6},{wch:8},{wch:12}];
+  ws["!cols"] = [{wch:12},{wch:6},{wch:10},{wch:6},{wch:8},{wch:12}]; // HolidayName列の分広げる
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
   XLSX.writeFile(wb, (((emp&&emp.name)||"noname")+"_"+ym+".xlsx"));
 }
@@ -534,6 +636,17 @@ function bulkWeekendsOff(){
   for (var d=1; d<=dim; d++){ if (isWeekend(y,m,d)){ if (!md[String(d)]) md[String(d)]={work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; } }
   saveState(); recalcAndRender(); renderYearSummary();
 }
+function bulkHolidaysOff(){
+  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
+  for (var d=1; d<=dim; d++){
+    var hname = getHolidayNameByDate(ym, d);
+    if (hname){
+      if (!md[String(d)]) md[String(d)] = { work:false, hours:0 };
+      md[String(d)].work = false; md[String(d)].hours = 0;
+    }
+  }
+  saveState(); recalcAndRender(); renderYearSummary();
+}
 function bulkApplyHours(){
   var ym = state.ui.ym, sp=ym.split("-"), y=Number(sp[0]), m=Number(sp[1]);
   var empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
@@ -569,16 +682,15 @@ function bulkApplyHours(){
   saveState(); recalcAndRender(); renderYearSummary();
 }
 
-// ===== 前月→今月 コピー（新規） =====
+// ===== 前月→今月 コピー =====
 function getPrevYM(ym){
   var sp = ym.split("-"); var y = Number(sp[0]), m = Number(sp[1]);
   m -= 1; if (m===0){ y -= 1; m = 12; }
   return y + "-" + pad2(m);
 }
 function isEmptyDay(rec){
-  // 「空」とみなす条件：存在しない／work=false かつ hoursが0/未設定
   if (!rec) return true;
-  if (rec.work) return false; // 出勤が入っていれば空ではない
+  if (rec.work) return false;
   var h = Number(rec.hours||0);
   return h===0;
 }
@@ -595,7 +707,6 @@ function copyPrevMonth(overwrite){
   var dimCur  = daysInMonth(curYM);
   var limit = Math.min(dimPrev, dimCur);
 
-  // 前月に実データがあるかチェック
   var hasData = false;
   for (var d=1; d<=dimPrev; d++){
     var r = mdPrev[String(d)];
@@ -615,7 +726,6 @@ function copyPrevMonth(overwrite){
       c.work  = !!p.work;
       c.hours = p.work ? (Number(p.hours)||0) : 0;
     } else {
-      // 空欄のみ埋める
       if (isEmptyDay(c)){
         c.work  = !!p.work;
         c.hours = p.work ? (Number(p.hours)||0) : 0;
