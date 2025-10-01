@@ -89,6 +89,13 @@ progress::-webkit-progress-bar { background: #eee; border-radius: 999px; }
 progress::-webkit-progress-value { border-radius: 999px; }
 
 .sim-grid { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 12px; }
+
+.year-table-wrap { overflow-x: auto; }
+.year-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.year-table th, .year-table td { border: 1px solid var(--border); padding: 8px; text-align: right; font-variant-numeric: tabular-nums; }
+.year-table th.month, .year-table td.month { text-align: center; }
+.year-table tfoot td { font-weight: 700; }
+
 @media (max-width: 920px) {
   .sim-grid { grid-template-columns: 1fr 1fr; }
 }
