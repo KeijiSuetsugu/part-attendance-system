@@ -308,16 +308,49 @@ function renderCalendar() {
     }(rec));
     cell.appendChild(tog);
 
-    var timeRow = document.createElement("div"); timeRow.className = "time-row";
-    var input = document.createElement("input"); input.type="number"; input.step="0.25"; input.min="0"; input.placeholder="勤務時間（h）";
-    input.value = rec.work ? String(rec.hours || "") : ""; input.disabled = !rec.work;
-    input.addEventListener("input", function(recRef, inputRef){
-      return function(){ var v = Number(inputRef.value); recRef.hours = isFinite(v) ? clamp(v,0,24) : 0; saveState(); renderTotals(); renderYearSummary(); };
-    }(rec, input));
-    var help = document.createElement("span"); help.className = "help"; help.textContent = "0.25=15分 / 0.5=30分";
-    timeRow.appendChild(input); timeRow.appendChild(help); cell.appendChild(timeRow);
+    var timeRow = document.createElement("div"); 
+timeRow.className = "time-row";
 
-    root.appendChild(cell);
+var input = document.createElement("input");
+input.type = "number";
+input.step = "0.25";
+input.min = "0";
+input.placeholder = "勤務時間（h）";
+input.inputMode = "decimal";   // ★ スマホで小数点キーボード
+input.autocomplete = "off";
+input.value = rec.work ? String(rec.hours || "") : "";
+input.disabled = !rec.work;
+
+// 入力値の見える化用ピル（右側に「7.50 h」など表示）
+var pill = document.createElement("span");
+pill.className = "val-pill";
+pill.textContent = (rec.work && rec.hours > 0) ? (Number(rec.hours).toFixed(2) + " h") : "";
+
+// 入力イベント（カンマ小数も許容）
+input.addEventListener("input", function(recRef, inputRef, pillRef){
+  return function(){
+    var raw = inputRef.value.replace(",", "."); // 1,5 → 1.5 もOK
+    var v = Number(raw);
+    recRef.hours = isFinite(v) ? clamp(v, 0, 24) : 0;
+
+    if (recRef.work && recRef.hours > 0) pillRef.textContent = recRef.hours.toFixed(2) + " h";
+    else pillRef.textContent = "";
+
+    saveState(); 
+    renderTotals(); 
+    renderYearSummary();
+  };
+}(rec, input, pill));
+
+var help = document.createElement("span"); 
+help.className = "help"; 
+help.textContent = "0.25=15分 / 0.5=30分";
+
+timeRow.appendChild(input);
+timeRow.appendChild(pill);
+timeRow.appendChild(help);
+cell.appendChild(timeRow);
+
   }
 }
 
