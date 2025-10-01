@@ -27,7 +27,7 @@
       </div>
     </section>
 
-    <!-- 従業員情報（選択中のスタッフ） -->
+    <!-- 従業員情報 -->
     <section class="card">
       <h2>従業員情報（選択中）</h2>
       <div class="row">
@@ -43,7 +43,7 @@
       <p id="emp-msg" class="muted"></p>
     </section>
 
-    <!-- 月選択/ナビ -->
+    <!-- 月選択 -->
     <section class="card">
       <h2>月の選択</h2>
       <div class="row">
@@ -55,10 +55,10 @@
       </div>
     </section>
 
-    <!-- 出勤簿（カレンダー） -->
+    <!-- 出勤簿 -->
     <section class="card">
       <h2>出勤簿（1日ごと）</h2>
-      <p class="muted">時間は「小数（0.25=15分、0.5=30分）」で入力。例：7時間30分→ <strong>7.5</strong></p>
+      <p class="muted">時間は小数（0.25=15分、0.5=30分）。例：7時間30分→ <strong>7.5</strong></p>
       <div class="calendar-frame">
         <div id="calendar" class="calendar" role="grid" aria-label="勤務カレンダー"></div>
       </div>
@@ -67,12 +67,10 @@
     <!-- 一括操作 -->
     <section class="card">
       <h2>一括操作（出勤/休み & 時間）</h2>
-
       <div class="bulk-grid">
         <div class="bulk-block">
           <div class="bulk-title">出勤/休みの一括変換</div>
           <div class="bulk-actions">
-            <!-- すべて ghost。押したものをJSで青（active）にします -->
             <button id="bulk-work-all" class="btn btn-ghost">月全体を出勤に</button>
             <button id="bulk-off-all" class="btn btn-ghost">月全体を休みに</button>
             <button id="bulk-weekdays-work" class="btn btn-ghost">平日を出勤に</button>
@@ -109,8 +107,6 @@
             </label>
             <button id="bulk-apply-hours" class="btn">一括適用</button>
           </div>
-          <p class="muted">※「空の出勤日のみに」は既に手入力した日を上書きしません。  
-            ※「未出勤日は出勤にする」にチェックすると、休みの日も出勤化して時間を設定します。</p>
         </div>
 
         <div class="bulk-block">
@@ -151,10 +147,8 @@
         </div>
       </div>
 
-      <!-- シミュレーター設定の要約（固定機能） -->
       <div id="sim-cap-summary" class="cap-summary">シミュレーター設定：—</div>
 
-      <!-- 既定ライン -->
       <div class="threshold">
         <div class="th-row">
           <span class="th-label">103万円ライン</span>
@@ -172,7 +166,7 @@
           <span id="pct-130" class="th-pct">0%</span>
         </div>
 
-        <!-- ★ 追加：カスタムライン A / B（自由入力） -->
+        <!-- カスタム進捗A/B -->
         <div class="th-row custom">
           <label for="th-custom-a" class="th-label">カスタムラインA（円）</label>
           <input id="th-custom-a" type="number" min="0" step="1000" placeholder="例）1200000" />
@@ -216,7 +210,7 @@
       <p class="muted">式：<code>月上限時間 ≒ 年間上限金額 ÷ 12 ÷ 時給</code>（15分刻み丸め）。</p>
     </section>
 
-    <!-- 年間サマリー（各月×金額） -->
+    <!-- 年間サマリー -->
     <section class="card">
       <h2>年間サマリー（各月×金額）</h2>
       <div class="row">
@@ -226,7 +220,7 @@
         <button id="refresh-summary" class="btn btn-ghost">再計算</button>
       </div>
       <div id="year-summary" class="year-table-wrap"></div>
-      <p class="muted">金額は「当月の合計時間 × 現在の時給」。月ごとに時給が変わる運用の場合は、月次表からExcelで補正してください。</p>
+      <p class="muted">金額＝当月の合計時間 × 現在の時給。月ごとに時給が変わる運用はExcelで補正してください。</p>
     </section>
 
     <!-- データ出力 -->
@@ -237,7 +231,7 @@
         <button id="export-csv-all" class="btn btn-ghost">CSV出力（全スタッフ・全期間）</button>
         <button id="export-xlsx-month" class="btn">Excel出力（.xlsx / このスタッフ・この月）</button>
       </div>
-      <p class="muted">CSVはExcelで開けます（UTF-8 / BOM付き）。.xlsx出力はSheetJSを使用。</p>
+      <p class="muted">CSVはExcelで開けます（UTF-8 / BOM付）。.xlsxはSheetJSをCDN→unpkgに自動フォールバック。</p>
     </section>
   </main>
 
@@ -245,7 +239,7 @@
     <small>© Demo. 税・社会保険の取り扱いは最新の法令/社内規程をご確認ください。</small>
   </footer>
 
-  <!-- Excel出力用ライブラリ（先読み）。うまく読めない環境向けにJS側でフォールバックも用意 -->
+  <!-- Excel出力用ライブラリ（先読み） -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
   <script src="script.js"></script>
 </body>
