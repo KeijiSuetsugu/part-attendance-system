@@ -6,6 +6,9 @@ var STORAGE_KEY = "part_attendance_v2";
 var HOLIDAY_CACHE_KEY = "holiday_cache_v1";
 var HOLIDAY_TTL_DAYS = 30;
 
+// 解析直後に自動適用（true: 解析/プレビュー時に即カレンダーへ反映）
+var AUTO_APPLY_ON_PARSE = true;
+
 // ===== ユーティリティ =====
 function $(sel){ return document.querySelector(sel); }
 function fmtJPY(n){ return "¥" + Math.round(n).toLocaleString("ja-JP", { maximumFractionDigits: 0 }); }
@@ -89,10 +92,10 @@ function currentEmployee(){ var id=state.currentEmpId; return state.employees.fi
 function ensureEmpMonth(empId, ym){ state.months[empId] = state.months[empId]||{}; state.months[empId][ym] = state.months[empId][ym]||{}; return state.months[empId][ym]; }
 
 // ====== 希望票：解析 / プレビュー / 適用 ======
-// 依存UIは #wish-text #wish-parse #wish-preview-btn #wish-apply #wish-keep-existing #wish-summary #wish-preview のみ
 onClick("wish-parse", function(){
   var txt = ($("#wish-text") && $("#wish-text").value) || "";
   var c = parseWishText(txt);
+
   var cap = c.preferCapYen ? ("¥"+c.preferCapYen.toLocaleString()) : (c.mentionFuyou ? "（扶養・UI選択準拠）" : "—");
   var sum = [
     "上限: " + cap,
@@ -105,14 +108,36 @@ onClick("wish-parse", function(){
   var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
   var plan = planAutoAssignment(state.ui.ym, c, keep);
   renderWishPreview(plan);
+
+  // ← 解析時に自動適用
+  if (AUTO_APPLY_ON_PARSE && plan && plan.entries && plan.entries.length>0){
+    var applied = applyWishPlan(plan, !keep);
+    if ($("#wish-summary")){
+      $("#wish-summary").textContent += " / 自動適用: " + applied + "件";
+    }
+  } else if (AUTO_APPLY_ON_PARSE && (!plan.entries || plan.entries.length===0)){
+    alert("適用できる候補がありません（条件不足／既存で目標達成の可能性）。");
+  }
 });
+
 onClick("wish-preview-btn", function(){
   var txt = ($("#wish-text") && $("#wish-text").value) || "";
   var c = parseWishText(txt);
   var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
   var plan = planAutoAssignment(state.ui.ym, c, keep);
   renderWishPreview(plan);
+
+  // ← プレビュー時も自動適用（同じルール）
+  if (AUTO_APPLY_ON_PARSE && plan && plan.entries && plan.entries.length>0){
+    var applied = applyWishPlan(plan, !keep);
+    if ($("#wish-summary")){
+      $("#wish-summary").textContent += " / 自動適用: " + applied + "件";
+    }
+  } else if (AUTO_APPLY_ON_PARSE && (!plan.entries || plan.entries.length===0)){
+    alert("適用できる候補がありません（条件不足／既存で目標達成の可能性）。");
+  }
 });
+
 onClick("wish-apply", function(){
   var txt = ($("#wish-text") && $("#wish-text").value) || "";
   var c = parseWishText(txt);
@@ -122,9 +147,8 @@ onClick("wish-apply", function(){
     alert("適用できる候補がありません（条件不足／既存で目標達成の可能性）。");
     return;
   }
-  var overwriteAll = !keep;
-  applyWishPlan(plan, overwriteAll);
-  alert("自動割付を適用しました。");
+  var applied = applyWishPlan(plan, !keep);
+  alert("自動割付を適用しました（"+applied+"件）。");
 });
 
 // ===== 初期化 =====
@@ -345,7 +369,7 @@ function renderCalendar() {
     }(rec));
     cell.appendChild(tog);
 
-    // 時間入力
+    // === 時間入力 ===
     var timeRow = document.createElement("div");
     timeRow.className = "time-row";
 
@@ -364,8 +388,6 @@ function renderCalendar() {
     pill.className = "val-pill";
     pill.textContent = (rec.work && rec.hours > 0) ? (Number(rec.hours).toFixed(2) + " h") : "";
 
-    var stepBox = document.createElement("div");
-    stepBox.className = "stepper";
     function applyValue(newVal){
       var v = clamp(newVal, 0, 24);
       v = Math.round(v * 4) / 4;
@@ -374,22 +396,6 @@ function renderCalendar() {
       pill.textContent = (rec.work && v>0) ? (v.toFixed(2) + " h") : "";
       saveState(); renderTotals(); renderYearSummary();
     }
-    function makeStep(label, delta){
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn-step";
-      b.textContent = label;
-      b.addEventListener("click", function(){
-        if (!rec.work) return;
-        var current = Number((input.value||"").replace(",", "."));
-        if (!isFinite(current)) current = 0;
-        applyValue(current + delta);
-      });
-      return b;
-    }
-    stepBox.appendChild(makeStep("−0.25", -0.25));
-    stepBox.appendChild(makeStep("+0.25", +0.25));
-    stepBox.appendChild(makeStep("+1.0", +1.0));
 
     input.addEventListener("input", function(){
       var raw = (input.value || "").replace(",", ".");
@@ -404,7 +410,6 @@ function renderCalendar() {
 
     timeRow.appendChild(input);
     timeRow.appendChild(pill);
-    timeRow.appendChild(stepBox);
     timeRow.appendChild(help);
     cell.appendChild(timeRow);
 
@@ -423,7 +428,6 @@ function renderTotals() {
   Object.keys(monthData).forEach(k=>{ var r=monthData[k]; if (r && r.work) sumHours += Number(r.hours)||0; });
   var sumWage = sumHours * wage;
 
-  // 年収見込み
   var projMode = state.ui.projMode || "thismonth";
   var projAnnual = 0;
   if (projMode === "thismonth") {
@@ -538,11 +542,13 @@ function renderYearSummary(){
   months.forEach(m=>html += "<th>"+m+"</th>");
   html += "<th>合計</th></tr></thead><tbody>";
 
+  // 金額
   html += '<tr><th class="month">金額</th>';
   var yearSum = 0;
   for (var m=1;m<=12;m++){ var a = calcMonthWage(emp, year, m).amount; yearSum += a; html += "<td>"+(a>0?fmtJPY(a):"—")+"</td>"; }
   html += "<td>"+fmtJPY(yearSum)+"</td></tr>";
 
+  // 時間
   html += '<tr><th class="month">時間(h)</th>';
   var yearHours = 0;
   for (var mm=1;mm<=12;mm++){ var h = calcMonthWage(emp, year, mm).hours; yearHours += h; html += "<td>"+(h>0?h.toFixed(2):"—")+"</td>"; }
@@ -763,7 +769,7 @@ function copyPrevMonth(overwrite){
   saveState(); recalcAndRender(); renderYearSummary(); alert("前月の内容を今月へコピーしました。");
 }
 
-// === 希望票解析 & 自動割付（UI依存を撤廃） ======================
+// === 希望票解析 & 自動割付（UI依存なし） ======================
 
 // 和暦っぽい表記も含めてざっくり数字抽出
 function toNumberSafe(s){ if (!s) return NaN; return Number(String(s).replace(/[^\d.]/g,'')); }
@@ -795,8 +801,8 @@ function parseWishText(raw){
   if (/祝日.*可|祝日.*OK/.test(text)) c.holidayOff = false;
 
   // 1日X時間 / Xh / 時間帯（10:00〜16:30 -> 6.5h）
-  var mDay = text.match(/1日\s*([0-9]+(?:\.[0-9]+)?)\s*時間|([0-9]+(?:\.[0-9]+)?)\s*h/);
-  if (mDay){ c.dailyHoursPrefer = toNumberSafe(mDay[1] || mDay[2]); }
+  var mDay = text.match(/(1日\s*([0-9]+(?:\.[0-9]+)?)\s*時間)|(([0-9]+(?:\.[0-9]+)?)\s*h)/);
+  if (mDay){ c.dailyHoursPrefer = toNumberSafe(mDay[2] || mDay[4]); }
   var mSpan = text.match(/(\d{1,2})(?::|：)?(\d{2})?\s*[〜~\-]\s*(\d{1,2})(?::|：)?(\d{2})?/);
   if (mSpan){
     var sH = toNumberSafe(mSpan[1]), sM = toNumberSafe(mSpan[2]||0);
@@ -811,7 +817,7 @@ function parseWishText(raw){
   var mWHours = text.match(/週\s*([0-9]+(?:\.[0-9]+)?)\s*時間/);
   if (mWHours) c.weeklyHours = toNumberSafe(mWHours[1]);
 
-  // 土日テキスト → 曜日集合へ直接反映（UIポリシーを使わない）
+  // 土日テキスト → 曜日集合へ
   if (/土日.*休|週末.*休/.test(text)) { c.weekdaysOff.add(0); c.weekdaysOff.add(6); }
   if (/土日.*可|週末.*可|土日.*OK/.test(text)) { c.weekdaysAllowed.add(0); c.weekdaysAllowed.add(6); }
 
@@ -846,7 +852,7 @@ function weekIndexInMonth(ym, day){
   return Math.floor((dow + (day-1)) / 7);
 }
 
-// 候補日：UIトグルに依存せず、テキスト制約のみで抽出
+// 候補日：テキスト制約のみで抽出
 function buildCandidateDays(ym, c){
   var [y,m] = ym.split("-").map(Number);
   var dim = daysInMonth(ym);
@@ -880,12 +886,12 @@ function planAutoAssignment(ym, c, keepExisting){
   var hourly = Number(emp.wage)||0;
 
   // 上限金額（希望票優先。『扶養』があればUI選択／なければ103万を既定に）
-  var selCap = getSelectedCap(); // なければ {cap:0}
+  var selCap = getSelectedCap();
   var defaultCap = c.mentionFuyou ? (selCap.cap||1030000) : 0;
   var capYen = (c.preferCapYen!=null) ? c.preferCapYen : defaultCap;
 
   // 月目標
-  var targetHours = calcMonthlyTargetHours(capYen, hourly); // cap or wage 未設定なら0
+  var targetHours = calcMonthlyTargetHours(capYen, hourly);
 
   var md = ensureEmpMonth(emp.id, ym);
   var dim = daysInMonth(ym);
@@ -938,7 +944,6 @@ function planAutoAssignment(ym, c, keepExisting){
     var remain = Math.max(0, targetHours - existingSum);
     if (remain <= 0) return { entries:[], total:0, target:Math.round(targetHours*4)/4, note:"既存入力で月目標に達しています" };
 
-    // 1) onDates から優先配分（基準は dailyHoursPrefer があればそれ、なければ後ほど均等）
     var strong = cand.filter(d=>c.onDates.has(d));
     var rest   = cand.filter(d=>!c.onDates.has(d));
 
@@ -950,18 +955,16 @@ function planAutoAssignment(ym, c, keepExisting){
         var d = strong[i];
         if (keepExisting){
           var r = md[String(d)];
-          if (r && r.work && (Number(r.hours)||0)>0) continue; // 既存優先
+          if (r && r.work && (Number(r.hours)||0)>0) continue;
         }
-        var put = baseH!=null ? Math.min(baseH, remain) : 0; // 後で均等配分するならここはスキップ可
+        var put = baseH!=null ? Math.min(baseH, remain) : 0;
         if (put>0 && canPlace(d, put)){ place(d, put); remain -= put; }
       }
     }
 
     // 残りを候補全体で均等配分
     if (remain>0){
-      // まだ入っていない候補
       var left = cand.filter(d=>{
-        // 既に entries に含まない & 既存で埋まっていない or keepExisting=false
         var already = entries.some(e=>e.day===d);
         if (already) return false;
         if (!keepExisting) return true;
@@ -970,8 +973,7 @@ function planAutoAssignment(ym, c, keepExisting){
       });
       if (left.length>0){
         var per = Math.max(0, Math.min(24, Math.round((remain/left.length)*4)/4));
-        // 0 なら順次1日ずつ残りを入れていく
-        if (per===0) per = 1; // 1h刻みで詰める（必要に応じて0.25に調整可）
+        if (per===0) per = 1;
         for (var j=0;j<left.length && remain>0;j++){
           var d2 = left[j];
           var put2 = Math.min(per, remain);
@@ -983,8 +985,7 @@ function planAutoAssignment(ym, c, keepExisting){
     return { entries, total: Math.round((filled-existingSum)*4)/4, target: Math.round(targetHours*4)/4, note:"" };
   }
 
-  // ケースB：cap/時給が未設定
-  // → dailyHoursPrefer があれば「希望日(onDates)」にだけ入れる
+  // ケースB：cap/時給が未設定 → 1日基準時間があり、希望日(onDates)があればそこだけ入れる
   if (isFinite(c.dailyHoursPrefer||NaN) && (c.dailyHoursPrefer||0)>0){
     var base = Math.min(24, Math.max(0, c.dailyHoursPrefer));
     var strongOnly = cand.filter(d=>c.onDates.has(d));
@@ -1002,7 +1003,6 @@ function planAutoAssignment(ym, c, keepExisting){
     return { entries, total: Math.round((filled-existingSum)*4)/4, target: Math.round((filled-existingSum)*4)/4, note:"上限未設定：希望日のみ配分" };
   }
 
-  // それ以外は条件不足
   return { entries:[], total:0, target:0, note:"上限金額/時給の設定、または1日基準時間の記載が必要です" };
 }
 
@@ -1023,23 +1023,28 @@ function renderWishPreview(plan){
       <tr><td>目標（月上限目安）</td><td style="text-align:right;">${plan.target.toFixed(2)} h</td></tr></tfoot></table>${note}`;
 }
 
-// 適用
+// 適用（実際に何件適用したかを返す）
 function applyWishPlan(plan, overwriteAll){
-  var emp = currentEmployee(); if (!emp) return;
+  var emp = currentEmployee(); if (!emp) return 0;
   var ym = state.ui.ym;
   var md = ensureEmpMonth(emp.id, ym);
 
+  var applied = 0;
   plan.entries.forEach(function(e){
     md[String(e.day)] = md[String(e.day)] || {work:false,hours:0};
     var r = md[String(e.day)];
     if (!overwriteAll){
       if (r.work && (Number(r.hours)||0)>0) return;
     }
+    var beforeH = Number(r.hours)||0, beforeW = !!r.work;
     r.work = true;
     r.hours = e.hours;
+    var changed = (!beforeW) || (Math.abs(beforeH - e.hours) > 1e-9);
+    if (changed) applied += 1;
   });
 
   saveState();
   recalcAndRender();
   renderYearSummary();
+  return applied;
 }
