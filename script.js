@@ -89,53 +89,6 @@ function firstDow(ym){ var [y,m]=ym.split("-").map(Number); return new Date(y, m
 function currentEmployee(){ var id=state.currentEmpId; return state.employees.find(e=>e.id===id)||null; }
 function ensureEmpMonth(empId, ym){ state.months[empId] = state.months[empId]||{}; state.months[empId][ym] = state.months[empId][ym]||{}; return state.months[empId][ym]; }
 
-// 希望票：解析 / プレビュー / 適用
-onClick("wish-parse", function(){
-  var txt = ($("#wish-text") && $("#wish-text").value) || "";
-  var c = parseWishText(txt);
-
-  // 解析サマリ
-  var cap = c.preferCapYen ? ("¥"+c.preferCapYen.toLocaleString()) : (c.mentionFuyou ? "（扶養・UI選択準拠）" : "—");
-  var sum = [
-    "上限: " + cap,
-    "1日基準: " + (c.dailyHoursPrefer!=null ? (c.dailyHoursPrefer + "h") : "—"),
-    "週: " + (c.weeklyDays!=null ? (c.weeklyDays + "日") : "—") + " / " + (c.weeklyHours!=null ? (c.weeklyHours + "h") : "—"),
-    "土日: " + (c.weekendPolicy ? (c.weekendPolicy==="on"?"可":"休") : "（UI設定）"),
-    "祝日: " + (c.holidayOff!=null ? (c.holidayOff?"休":"可") : "（UI設定）"),
-  ].join(" / ");
-  $("#wish-summary").textContent = "解析結果 → " + sum;
-
-  // 一旦プレビューも更新
-  var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
-  var stdH = Number(($("#wish-default-hours") && $("#wish-default-hours").value) || 6);
-  var plan = planAutoAssignment(state.ui.ym, stdH, c, keep);
-  renderWishPreview(plan);
-});
-
-onClick("wish-preview-btn", function(){
-  var txt = ($("#wish-text") && $("#wish-text").value) || "";
-  var c = parseWishText(txt);
-  var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
-  var stdH = Number(($("#wish-default-hours") && $("#wish-default-hours").value) || 6);
-  var plan = planAutoAssignment(state.ui.ym, stdH, c, keep);
-  renderWishPreview(plan);
-});
-
-onClick("wish-apply", function(){
-  var txt = ($("#wish-text") && $("#wish-text").value) || "";
-  var c = parseWishText(txt);
-  var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
-  var stdH = Number(($("#wish-default-hours") && $("#wish-default-hours").value) || 6);
-  var plan = planAutoAssignment(state.ui.ym, stdH, c, keep);
-  if (!plan || !plan.entries || plan.entries.length===0){
-    alert("適用できる候補がありません（既に目標を満たしている／条件が厳しすぎる可能性）。");
-    return;
-  }
-  var overwriteAll = !keep;
-  applyWishPlan(plan, overwriteAll);
-  alert("自動割付を適用しました。");
-});
-
 // ===== 初期化 =====
 document.addEventListener("DOMContentLoaded", function(){
   renderEmpTabs();
@@ -263,6 +216,51 @@ document.addEventListener("DOMContentLoaded", function(){
   onClick("export-csv-all", exportCsvAll);
   onClick("export-xlsx-month", exportXlsxThisMonth);
 
+  // ★希望票：解析 / プレビュー / 適用（DOMContentLoaded 内へ移動）
+  onClick("wish-parse", function(){
+    var txt = ($("#wish-text") && $("#wish-text").value) || "";
+    var c = parseWishText(txt);
+
+    var cap = c.preferCapYen ? ("¥"+c.preferCapYen.toLocaleString()) : (c.mentionFuyou ? "（扶養・UI選択準拠）" : "—");
+    var sum = [
+      "上限: " + cap,
+      "1日基準: " + (c.dailyHoursPrefer!=null ? (c.dailyHoursPrefer + "h") : "—"),
+      "週: " + (c.weeklyDays!=null ? (c.weeklyDays + "日") : "—") + " / " + (c.weeklyHours!=null ? (c.weeklyHours + "h") : "—"),
+      "土日: " + (c.weekendPolicy ? (c.weekendPolicy==="on"?"可":"休") : "（UI設定）"),
+      "祝日: " + (c.holidayOff!=null ? (c.holidayOff?"休":"可") : "（UI設定）"),
+    ].join(" / ");
+    $("#wish-summary").textContent = "解析結果 → " + sum;
+
+    var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
+    var stdH = Number(($("#wish-default-hours") && $("#wish-default-hours").value) || 6);
+    var plan = planAutoAssignment(state.ui.ym, stdH, c, keep);
+    renderWishPreview(plan);
+  });
+
+  onClick("wish-preview-btn", function(){
+    var txt = ($("#wish-text") && $("#wish-text").value) || "";
+    var c = parseWishText(txt);
+    var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
+    var stdH = Number(($("#wish-default-hours") && $("#wish-default-hours").value) || 6);
+    var plan = planAutoAssignment(state.ui.ym, stdH, c, keep);
+    renderWishPreview(plan);
+  });
+
+  onClick("wish-apply", function(){
+    var txt = ($("#wish-text") && $("#wish-text").value) || "";
+    var c = parseWishText(txt);
+    var keep = ($("#wish-keep-existing") && $("#wish-keep-existing").checked) ? true : false;
+    var stdH = Number(($("#wish-default-hours") && $("#wish-default-hours").value) || 6);
+    var plan = planAutoAssignment(state.ui.ym, stdH, c, keep);
+    if (!plan || !plan.entries || plan.entries.length===0){
+      alert("適用できる候補がありません（既に目標を満たしている／条件が厳しすぎる可能性）。");
+      return;
+    }
+    var overwriteAll = !keep;
+    applyWishPlan(plan, overwriteAll);
+    alert("自動割付を適用しました。");
+  });
+
   // 初期描画
   ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){
     if ($("#th-custom-a")) $("#th-custom-a").value = state.ui.customCaps.a || "";
@@ -354,7 +352,7 @@ function renderCalendar() {
     }(rec));
     cell.appendChild(tog);
 
-    // === 時間入力（スマホ視認性UP：入力欄 + 値ピル + ステッパー） ===
+    // === 時間入力（数値のみ・コンパクト） ===
     var timeRow = document.createElement("div");
     timeRow.className = "time-row";
 
@@ -364,50 +362,21 @@ function renderCalendar() {
     input.min = "0";
     input.max = "24";
     input.placeholder = "勤務時間（h）";
-    input.inputMode = "decimal";     // スマホで小数点キーボード
+    input.inputMode = "decimal";   // スマホで小数点キーボード
     input.autocomplete = "off";
     input.value = rec.work ? String(rec.hours || "") : "";
     input.disabled = !rec.work;
 
-    // 値の見える化ピル
-    var pill = document.createElement("span");
-    pill.className = "val-pill";
-    pill.textContent = (rec.work && rec.hours > 0) ? (Number(rec.hours).toFixed(2) + " h") : "";
-
-    // ステッパー
-    var stepBox = document.createElement("div");
-    stepBox.className = "stepper";
-    function applyValue(newVal){
-      var v = clamp(newVal, 0, 24);
-      v = Math.round(v * 4) / 4; // 0.25刻み
-      rec.hours = v;
-      input.value = v ? String(v) : "";
-      pill.textContent = (rec.work && v>0) ? (v.toFixed(2) + " h") : "";
-      saveState(); renderTotals(); renderYearSummary();
-    }
-    function makeStep(label, delta){
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn-step";
-      b.textContent = label;
-      b.addEventListener("click", function(){
-        if (!rec.work) return;
-        var current = Number((input.value||"").replace(",", "."));
-        if (!isFinite(current)) current = 0;
-        applyValue(current + delta);
-      });
-      return b;
-    }
-    stepBox.appendChild(makeStep("−0.25", -0.25));
-    stepBox.appendChild(makeStep("+0.25", +0.25));
-    stepBox.appendChild(makeStep("+1.0", +1.0));
-
-    // 手入力（カンマ小数も許容）
+    // 手入力で即時反映（カンマ小数も許容）
     input.addEventListener("input", function(){
       var raw = (input.value || "").replace(",", ".");
       var v = Number(raw);
       if (!isFinite(v)) v = 0;
-      applyValue(v);
+      v = Math.max(0, Math.min(24, Math.round(v*4)/4)); // 0.25刻み
+      rec.hours = v;
+      saveState(); 
+      renderTotals();
+      renderYearSummary();
     });
 
     var help = document.createElement("span");
@@ -415,8 +384,6 @@ function renderCalendar() {
     help.textContent = "0.25=15分 / 0.5=30分";
 
     timeRow.appendChild(input);
-    timeRow.appendChild(pill);
-    timeRow.appendChild(stepBox);
     timeRow.appendChild(help);
     cell.appendChild(timeRow);
 
@@ -781,6 +748,7 @@ function copyPrevMonth(overwrite){
   }
   saveState(); recalcAndRender(); renderYearSummary(); alert("前月の内容を今月へコピーしました。");
 }
+
 // === 希望票解析 & 自動割付（AI：ルールベース） ======================
 
 // 和暦っぽい表記も来るため、ざっくり数字抽出のユーティリティ
@@ -957,7 +925,7 @@ function planAutoAssignment(ym, standardHours, constraints, keepExisting){
     if (!keepExisting) return false;
     var r = md[String(d)];
     return r && r.work && (Number(r.hours)||0)>0;
-    }
+  }
 
   for (var i=0; i<candidates.length && filled < remain; i++){
     var d = candidates[i];
