@@ -69,19 +69,18 @@ function migrateV1ToV2(old) {
   var firstId = uid();
   var employees = [{ id:firstId, name:(old.employee&&old.employee.name)||"", wage:(old.employee&&old.employee.wage)||0 }];
   var months = {}; months[firstId] = old.months || {};
-  return { employees, currentEmpId:firstId, months, ui:{ ym:(old.ui&&old.ui.ym)||toYM(new Date()), projMode:"thismonth", customCaps:{a:0,b:0}, bulkActiveId:"" } };
+  return { employees, currentEmpId:firstId, months, ui:{ ym:(old.ui&&old.ui.ym)||toYM(new Date()), projMode:"thismonth", customCaps:{a:0,b:0} } };
 }
 function loadStateOrMigrate() {
   try { var raw2 = localStorage.getItem(STORAGE_KEY); if (raw2) {
     var st = JSON.parse(raw2);
     if (!st.ui) st.ui = {};
     if (!st.ui.customCaps) st.ui.customCaps = {a:0,b:0};
-    if (st.ui.bulkActiveId===undefined) st.ui.bulkActiveId = "";
     return st;
   }} catch(e){}
   try { var raw1 = localStorage.getItem("part_attendance_v1"); if (raw1) { var mig = migrateV1ToV2(JSON.parse(raw1)); saveState(mig); return mig; } } catch(e){}
   var id = uid();
-  var fresh = { employees:[{id, name:"", wage:0}], currentEmpId:id, months:{}, ui:{ ym:toYM(new Date()), projMode:"thismonth", customCaps:{a:0,b:0}, bulkActiveId:"" } };
+  var fresh = { employees:[{id, name:"", wage:0}], currentEmpId:id, months:{}, ui:{ ym:toYM(new Date()), projMode:"thismonth", customCaps:{a:0,b:0} } };
   saveState(fresh); return fresh;
 }
 function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s||state)); }
@@ -109,7 +108,6 @@ onClick("wish-parse", function(){
   var plan = planAutoAssignment(state.ui.ym, c, keep);
   renderWishPreview(plan);
 
-  // ← 解析時に自動適用
   if (AUTO_APPLY_ON_PARSE && plan && plan.entries && plan.entries.length>0){
     var applied = applyWishPlan(plan, !keep);
     if ($("#wish-summary")){
@@ -127,7 +125,6 @@ onClick("wish-preview-btn", function(){
   var plan = planAutoAssignment(state.ui.ym, c, keep);
   renderWishPreview(plan);
 
-  // ← プレビュー時も自動適用（同じルール）
   if (AUTO_APPLY_ON_PARSE && plan && plan.entries && plan.entries.length>0){
     var applied = applyWishPlan(plan, !keep);
     if ($("#wish-summary")){
@@ -182,24 +179,24 @@ document.addEventListener("DOMContentLoaded", function(){
     $("#month-picker").value = state.ui.ym;
     $("#proj-mode").value = state.ui.projMode;
     if (yp) yp.value = getYearFromYM(state.ui.ym);
-    renderEmpTabs(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); applyBulkActiveFromState();
+    renderEmpTabs(); recalcAndRender(); syncSimulatorWage(); renderYearSummary(); updateCapSummary();
   });
 
   // 月選択
   onClick("prev-month", function(){
     var [y,m] = state.ui.ym.split("-").map(Number); var d=new Date(y,m-1,1); d.setMonth(d.getMonth()-1);
     state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); });
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateCapSummary(); });
   });
   onClick("next-month", function(){
     var [y,m] = state.ui.ym.split("-").map(Number); var d=new Date(y,m-1,1); d.setMonth(d.getMonth()+1);
     state.ui.ym = toYM(d); $("#month-picker").value = state.ui.ym; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); });
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateCapSummary(); });
   });
   var mp = $("#month-picker");
   mp && mp.addEventListener("change", function(e){
     state.ui.ym = e.target.value; if (yp) yp.value = getYearFromYM(state.ui.ym);
-    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateBulkRangeLimits(); updateCapSummary(); });
+    saveState(); ensureHolidaysForYear(getYearFromYM(state.ui.ym), function(){ recalcAndRender(); renderYearSummary(); updateCapSummary(); });
   });
 
   // スタッフ追加/削除/並び替え
@@ -253,26 +250,6 @@ document.addEventListener("DOMContentLoaded", function(){
   yrPick && yrPick.addEventListener("change", renderYearSummary);
   onClick("refresh-summary", renderYearSummary);
 
-  // 一括操作（出勤/休み）
-  onClick("bulk-work-all", function(){ bulkWorkAll(); setBulkActive("bulk-work-all"); });
-  onClick("bulk-off-all", function(){ bulkOffAll(); setBulkActive("bulk-off-all"); });
-  onClick("bulk-weekdays-work", function(){ bulkWeekdaysWork(); setBulkActive("bulk-weekdays-work"); });
-  onClick("bulk-weekends-off", function(){ bulkWeekendsOff(); setBulkActive("bulk-weekends-off"); });
-  onClick("bulk-holidays-off", function(){ bulkHolidaysOff(); setBulkActive("bulk-holidays-off"); });
-
-  // 一括操作（時間）
-  var bulkScope = $("#bulk-scope"); bulkScope && bulkScope.addEventListener("change", onBulkScopeChange);
-  onClick("bulk-apply-hours", bulkApplyHours);
-
-  // 前月コピー
-  onClick("copy-prev-fill", function(){ copyPrevMonth(false); });
-  onClick("copy-prev-overwrite", function(){ if(confirm("前月の内容で今月をすべて上書きします。よろしいですか？")) copyPrevMonth(true); });
-
-  // カスタムライン（A/B）
-  var a=$("#th-custom-a"), b=$("#th-custom-b");
-  if (a) a.addEventListener("input", function(){ state.ui.customCaps.a = Number(a.value)||0; saveState(); renderTotals(); });
-  if (b) b.addEventListener("input", function(){ state.ui.customCaps.b = Number(b.value)||0; saveState(); renderTotals(); });
-
   // 出力
   onClick("export-csv-month", exportCsvThisMonth);
   onClick("export-csv-all", exportCsvAll);
@@ -284,9 +261,7 @@ document.addEventListener("DOMContentLoaded", function(){
     if ($("#th-custom-b")) $("#th-custom-b").value = state.ui.customCaps.b || "";
     recalcAndRender();
     renderYearSummary();
-    updateBulkRangeLimits();
     updateCapSummary();
-    applyBulkActiveFromState();
   });
 });
 
@@ -369,7 +344,7 @@ function renderCalendar() {
     }(rec));
     cell.appendChild(tog);
 
-    // === 時間入力 ===
+    // === 時間入力（スマホ視認性UP：数値入力 + ピル） ===
     var timeRow = document.createElement("div");
     timeRow.className = "time-row";
 
@@ -390,7 +365,7 @@ function renderCalendar() {
 
     function applyValue(newVal){
       var v = clamp(newVal, 0, 24);
-      v = Math.round(v * 4) / 4;
+      v = Math.round(v * 4) / 4; // 0.25刻み
       rec.hours = v;
       input.value = v ? String(v) : "";
       pill.textContent = (rec.work && v>0) ? (v.toFixed(2) + " h") : "";
@@ -428,6 +403,7 @@ function renderTotals() {
   Object.keys(monthData).forEach(k=>{ var r=monthData[k]; if (r && r.work) sumHours += Number(r.hours)||0; });
   var sumWage = sumHours * wage;
 
+  // 年収見込み
   var projMode = state.ui.projMode || "thismonth";
   var projAnnual = 0;
   if (projMode === "thismonth") {
@@ -449,12 +425,14 @@ function renderTotals() {
   $("#sum-wage").textContent = fmtJPY(sumWage);
   $("#proj-annual").textContent = fmtJPY(projAnnual);
 
+  // 進捗バー
   setBar("bar-103","pct-103", projAnnual, THRESHOLDS.T103);
   setBar("bar-106","pct-106", projAnnual, THRESHOLDS.T106);
   setBar("bar-130","pct-130", projAnnual, THRESHOLDS.T130);
   setBar("bar-custom-a","pct-custom-a", projAnnual, state.ui.customCaps.a||0);
   setBar("bar-custom-b","pct-custom-b", projAnnual, state.ui.customCaps.b||0);
 
+  // 注意文
   var msgs = [];
   if (projAnnual >= THRESHOLDS.T130) msgs.push("130万円ラインを超える見込みです。");
   else if (projAnnual >= THRESHOLDS.T130*0.9) msgs.push("130万円ラインの90%を超えています（要注意）。");
@@ -664,89 +642,6 @@ function exportXlsxThisMonth(){
   });
 }
 
-// ===== 一括操作 =====
-function onBulkScopeChange(){
-  var scope = $("#bulk-scope"); if (!scope) return;
-  var rangeEnabled = scope.value === "date_range_overwrite";
-  var from = $("#bulk-from"), to = $("#bulk-to");
-  if (from) from.disabled = !rangeEnabled;
-  if (to) to.disabled = !rangeEnabled;
-}
-function updateBulkRangeLimits(){
-  var dim = daysInMonth(state.ui.ym);
-  var from = $("#bulk-from"), to = $("#bulk-to");
-  if (from){ from.min=1; from.max=dim; if (!from.value) from.value=1; }
-  if (to){ to.min=1; to.max=dim; if (!to.value) to.value=dim; }
-}
-var BULK_IDS = ["bulk-work-all","bulk-off-all","bulk-weekdays-work","bulk-weekends-off","bulk-holidays-off"];
-function setBulkActive(id){
-  state.ui.bulkActiveId = id; saveState();
-  BULK_IDS.forEach(function(k){
-    var el = $("#"+k);
-    if (!el) return;
-    if (k===id) { el.classList.remove("btn-ghost"); el.classList.add("btn-active"); }
-    else { el.classList.remove("btn-active"); el.classList.add("btn-ghost"); }
-  });
-}
-function applyBulkActiveFromState(){ if (state.ui.bulkActiveId) setBulkActive(state.ui.bulkActiveId); }
-function bulkWorkAll(){
-  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
-  for (var d=1; d<=dim; d++){ md[String(d)] = md[String(d)]||{work:false,hours:0}; md[String(d)].work=true; }
-  saveState(); recalcAndRender(); renderYearSummary();
-}
-function bulkOffAll(){
-  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
-  for (var d=1; d<=dim; d++){ md[String(d)] = md[String(d)]||{work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; }
-  saveState(); recalcAndRender(); renderYearSummary();
-}
-function bulkWeekdaysWork(){
-  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
-  var [y,m]=ym.split("-").map(Number);
-  for (var d=1; d<=dim; d++){ if (!isWeekend(y,m,d)){ md[String(d)] = md[String(d)]||{work:false,hours:0}; md[String(d)].work=true; } }
-  saveState(); recalcAndRender(); renderYearSummary();
-}
-function bulkWeekendsOff(){
-  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
-  var [y,m]=ym.split("-").map(Number);
-  for (var d=1; d<=dim; d++){ if (isWeekend(y,m,d)){ md[String(d)] = md[String(d)]||{work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; } }
-  saveState(); recalcAndRender(); renderYearSummary();
-}
-function bulkHolidaysOff(){
-  var ym = state.ui.ym, empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
-  for (var d=1; d<=dim; d++){
-    var hname = getHolidayNameByDate(ym, d);
-    if (hname){ md[String(d)] = md[String(d)]||{work:false,hours:0}; md[String(d)].work=false; md[String(d)].hours=0; }
-  }
-  saveState(); recalcAndRender(); renderYearSummary();
-}
-function bulkApplyHours(){
-  var ym = state.ui.ym, [y,m]=ym.split("-").map(Number), empId = state.currentEmpId, md = ensureEmpMonth(empId, ym), dim = daysInMonth(ym);
-  var hours = Number(($("#bulk-hours") && $("#bulk-hours").value) || "");
-  if (!isFinite(hours) || hours<0){ alert("時間を正しく入力してください（例：7.5）"); return; }
-  hours = clamp(Math.round(hours*4)/4, 0, 24);
-  var scopeEl = $("#bulk-scope"); var scope = scopeEl? scopeEl.value : "all_working_overwrite";
-  var markWork = ($("#bulk-mark-work") && $("#bulk-mark-work").checked) ? true : false;
-  var from = Number(($("#bulk-from") && $("#bulk-from").value) || 1);
-  var to = Number(($("#bulk-to") && $("#bulk-to").value) || dim);
-  if (from>to){ var t=from; from=to; to=t; } from = clamp(from,1,dim); to = clamp(to,1,dim);
-
-  for (var d=1; d<=dim; d++){
-    md[String(d)] = md[String(d)] || { work:false, hours:0 };
-    var rec = md[String(d)];
-    var weekday = !isWeekend(y,m,d);
-    var inScope = false;
-    if (scope==="all_working_overwrite") inScope = (rec.work || markWork);
-    else if (scope==="working_empty_only") inScope = (rec.work || markWork) && (!rec.hours || rec.hours===0);
-    else if (scope==="weekdays_overwrite") inScope = weekday && (rec.work || markWork);
-    else if (scope==="weekends_overwrite") inScope = !weekday && (rec.work || markWork);
-    else if (scope==="date_range_overwrite") inScope = (d>=from && d<=to) && (rec.work || markWork);
-    if (!inScope) continue;
-    if (markWork) rec.work = true;
-    if (rec.work) rec.hours = hours;
-  }
-  saveState(); recalcAndRender(); renderYearSummary();
-}
-
 // ===== 前月→今月 コピー =====
 function getPrevYM(ym){
   var [y,m]=ym.split("-").map(Number); m -= 1; if (m===0){ y -= 1; m = 12; } return y + "-" + pad2(m);
@@ -769,9 +664,9 @@ function copyPrevMonth(overwrite){
   saveState(); recalcAndRender(); renderYearSummary(); alert("前月の内容を今月へコピーしました。");
 }
 
-// === 希望票解析 & 自動割付（UI依存なし） ======================
+// === 希望票解析 & 自動割付（完全テキスト駆動） ======================
 
-// 和暦っぽい表記も含めてざっくり数字抽出
+// ざっくり数字抽出
 function toNumberSafe(s){ if (!s) return NaN; return Number(String(s).replace(/[^\d.]/g,'')); }
 var JP_WEEK = { "日":0, "月":1, "火":2, "水":3, "木":4, "金":5, "土":6 };
 
@@ -796,7 +691,7 @@ function parseWishText(raw){
   else if (/106\s*万|1[,，]?\s*060[,，]?\s*000/.test(text)) c.preferCapYen = 1060000;
   else if (/103\s*万|1[,，]?\s*030[,，]?\s*000/.test(text)) c.preferCapYen = 1030000;
 
-  // 祝日ポリシー（テキストにあるときだけ反映）
+  // 祝日ポリシー
   if (/祝日.*休/.test(text)) c.holidayOff = true;
   if (/祝日.*可|祝日.*OK/.test(text)) c.holidayOff = false;
 
@@ -879,7 +774,7 @@ function orderByWish(ym, candidates, c){
   return strong.concat(rest);
 }
 
-// === 核心：標準シフト＆土日UIなしで割付 ===
+// === 核心：完全テキスト駆動で割付 ===
 function planAutoAssignment(ym, c, keepExisting){
   var emp = currentEmployee(); 
   if (!emp) return {entries:[], total:0, target:0, note:"スタッフ未選択"};
@@ -1000,7 +895,7 @@ function planAutoAssignment(ym, c, keepExisting){
       }
       if (canPlace(d3, base)) place(d3, base);
     }
-    return { entries, total: Math.round((filled-existingSum)*4)/4, target: Math.round((filled-existingSum)*4)/4, note:"上限未設定：希望日のみ配分" };
+    return { entries:[], total: Math.round((filled-existingSum)*4)/4, target: Math.round((filled-existingSum)*4)/4, note:"上限未設定：希望日のみ配分" };
   }
 
   return { entries:[], total:0, target:0, note:"上限金額/時給の設定、または1日基準時間の記載が必要です" };
