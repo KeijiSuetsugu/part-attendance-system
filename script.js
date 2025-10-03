@@ -30,7 +30,7 @@ function normalizeText(s){
     .replace(/[：]/g, ":")
     .replace(/[〜～]/g, "~")
     .replace(/[・､，]/g, ",")
-    .replace(/[　\s]+/g, " ")        // 連続空白を1つに
+    .replace(/[　\s]+/g, " ")
     .trim();
 }
 /* 緩い数値化（小数点のみ残す） */
@@ -104,20 +104,20 @@ function parseWeekCharsToSet(str){
 }
 
 function parseWishText(raw){
-  // 正規化（全角→半角・中黒/句読点→カンマ・空白整理）
   var text = normalizeText(raw||"");
 
   var c = {
     preferCapYen: null,
-    mentionFuyou: /扶養.*(範囲|内)/.test(text),
-    holidayOff: null,            // true|false|null
+    mentionFuyou: /扶養.*(範囲|内|希望)/.test(text),
+    holidayOff: null,
     dailyHoursPrefer: null,
     weeklyDays: null,
     weeklyHours: null,
     weekdaysAllowed: new Set(),
     weekdaysOff: new Set(),
     onDates: new Set(),
-    offDates: new Set()
+    offDates: new Set(),
+    allowedIsOnly: false   // ← 「のみ/だけ/中心」を検出したら true
   };
 
   // 上限（103/106/130 万円）
@@ -129,14 +129,13 @@ function parseWishText(raw){
   if (/祝日.*休/.test(text)) c.holidayOff = true;
   if (/祝日.*可|祝日.*OK/i.test(text)) c.holidayOff = false;
 
-  // 勤務時間（全角対応後なので \d でOK）
-  // 例：「勤務時間は4時間」「実働: 6 時間」「1日 5.5 時間」「5h」
+  // 勤務時間
   var mFixed = text.match(/(勤務時間|実働|希望時間)\s*[:は]?\s*([0-9]+(?:\.[0-9]+)?)\s*時間/);
   if (mFixed){ c.dailyHoursPrefer = toNumberSafe(mFixed[2]); }
   var mDay = text.match(/1日\s*([0-9]+(?:\.[0-9]+)?)\s*時間|([0-9]+(?:\.[0-9]+)?)\s*h/i);
   if (!c.dailyHoursPrefer && mDay){ c.dailyHoursPrefer = toNumberSafe(mDay[1] || mDay[2]); }
 
-  // 時間帯 → 所要時間（10:00~16:30 / 9-15）
+  // 時間帯 → 所要時間
   var mSpan = text.match(/(\d{1,2})(?::(\d{2}))?\s*[~\-]\s*(\d{1,2})(?::(\d{2}))?/);
   if (mSpan){
     var sH = toNumberSafe(mSpan[1]), sM = toNumberSafe(mSpan[2]||0);
@@ -151,24 +150,27 @@ function parseWishText(raw){
   var mWHours = text.match(/週\s*([0-9]+(?:\.[0-9]+)?)\s*時間/);
   if (mWHours) c.weeklyHours = toNumberSafe(mWHours[1]);
 
-  // ★ 曜日リスト＋可否（例：「月・火・木は出勤」「水金は休み」「土日可」「平日中心」）
-  // 正規化済みなので「・」はカンマに置き換わっている前提。カンマやスペースを許容しつつ拾う。
-  // パターン1： [月火水木金土日, ]+ は (出勤|勤務|可|OK|休み|不可|NG)
-  var reWeekList = /([月火水木金土日,\s]+?)\s*は?\s*(出勤|勤務|可|OK|休み|不可|NG)/g;
+  // ★ 曜日リスト＋可否（「のみ/だけ/中心」対応）
+  // 例：「月,火,木のみ出勤」「月火木だけ勤務」「月火木中心で出勤」
+  var reWeekList = /([月火水木金土日,\s]*?)(?:のみ|だけ|中心)?\s*は?\s*(出勤|勤務|可|OK|休み|不可|NG)/gi;
   var m;
   while ((m = reWeekList.exec(text)) !== null){
-    var daysStr = m[1].replace(/[, ]+/g,""); // カンマ/空白除去 → 例「月火木」
+    var rawDays = (m[1]||"").replace(/[, ]+/g,""); // → 「月火木」
     var verb = m[2];
-    var set = parseWeekCharsToSet(daysStr);
+    var isOnly = /のみ|だけ|中心/.test(m[0]);      // ← 文全体から検出
+    // 「のみ/だけ/中心」を文字列から除去して曜日セット化
+    rawDays = rawDays.replace(/のみ|だけ|中心/g,"");
+    var set = parseWeekCharsToSet(rawDays);
+
     if (/出勤|勤務|可|OK/i.test(verb)){
       set.forEach(d=>c.weekdaysAllowed.add(d));
-      // 許可が明示された場合、他曜日を除外する設計は buildCandidateDays 側で処理
+      if (isOnly) c.allowedIsOnly = true; // ← これが肝
     } else {
       set.forEach(d=>c.weekdaysOff.add(d));
     }
   }
 
-  // パターン2：個別曜日 OK/NG（単発表現にも対応）
+  // 単発表現
   Object.keys(JP_WEEK).forEach(function(k){
     var reOk = new RegExp(k+"[曜日]?(は)?(出勤|勤務|出勤可|希望|入れる|OK)","i");
     var reNg = new RegExp(k+"[曜日]?(は)?(不可|NG|休み|入れない)","i");
@@ -177,8 +179,8 @@ function parseWishText(raw){
   });
 
   // 「平日のみ/中心」「土日中心」
-  if (/平日(のみ|だけ|中心)/.test(text)){ [1,2,3,4,5].forEach(d=>c.weekdaysAllowed.add(d)); c.weekdaysOff.add(0); c.weekdaysOff.add(6); }
-  if (/(土日|週末)(のみ|だけ|中心)/.test(text)){ c.weekdaysAllowed.add(0); c.weekdaysAllowed.add(6); [1,2,3,4,5].forEach(d=>c.weekdaysOff.add(d)); }
+  if (/平日(のみ|だけ|中心)/.test(text)){ [1,2,3,4,5].forEach(d=>c.weekdaysAllowed.add(d)); c.weekdaysOff.add(0); c.weekdaysOff.add(6); c.allowedIsOnly = true; }
+  if (/(土日|週末)(のみ|だけ|中心)/.test(text)){ c.weekdaysAllowed.add(0); c.weekdaysAllowed.add(6); [1,2,3,4,5].forEach(d=>c.weekdaysOff.add(d)); c.allowedIsOnly = true; }
 
   // 特定日（15日は休み / 22日は入れる）
   var reDay = /(\d{1,2})\s*日/g, m2;
@@ -223,7 +225,7 @@ function buildCandidateDays(ym, c){
 
     if (c.weekdaysOff.has(w)) continue;
 
-    // 「許可された曜日だけ」に絞る（Allowed が一つでも指定されていればそれを優先）
+    // 「許可された曜日だけ」に絞る（Allowed が指定されていればそれを優先）
     if (c.weekdaysAllowed.size>0 && !c.weekdaysAllowed.has(w) && !c.onDates.has(d)) continue;
 
     if (holidayOff && getHolidayNameByDate(ym, d) && !c.onDates.has(d)) continue;
@@ -231,11 +233,9 @@ function buildCandidateDays(ym, c){
 
     res.push(d);
   }
-  // 強制 ON
   c.onDates.forEach(function(d){ if (res.indexOf(d)===-1) res.push(d); });
   res.sort((a,b)=>a-b);
 
-  // 候補が空なら 平日候補 → 全日 とフォールバック
   if (res.length===0) res = allWeekdayCandidates(ym, holidayOff);
   if (res.length===0){ for (var dd=1; dd<=dim; dd++) res.push(dd); }
   return res;
@@ -350,33 +350,28 @@ function applyWishPlan(plan, overwriteAll){
   var ym = state.ui.ym;
   var md = ensureEmpMonth(emp.id, ym);
 
-  var c = window.__lastConstraints || { weekdaysOff:new Set(), weekdaysAllowed:new Set(), onDates:new Set(), offDates:new Set(), holidayOff:null, dailyHoursPrefer:null };
+  var c = window.__lastConstraints || { weekdaysOff:new Set(), weekdaysAllowed:new Set(), onDates:new Set(), offDates:new Set(), holidayOff:null, dailyHoursPrefer:null, allowedIsOnly:false };
   var [y,m] = ym.split("-").map(Number);
   var dim = daysInMonth(ym);
 
-  // NG 指定は休みに
-  for (var d=1; d<=dim; d++){
-    if (c.offDates.has(d)){
-      md[String(d)] = md[String(d)] || {work:false,hours:0};
-      md[String(d)].work = false; md[String(d)].hours = 0;
+  // 1) 「のみ」指定がある場合：Allowed 以外は強制で休み
+  if (c.allowedIsOnly && c.weekdaysAllowed.size>0){
+    for (var d=1; d<=dim; d++){
+      var w = new Date(y, m-1, d).getDay();
+      if (!c.weekdaysAllowed.has(w) && !c.onDates.has(d)){
+        md[String(d)] = md[String(d)] || {work:false,hours:0};
+        md[String(d)].work = false; md[String(d)].hours = 0;
+      }
     }
   }
-  // 曜日NG/OK、祝日休
+
+  // 2) NG 指定・祝日休
   for (var d2=1; d2<=dim; d2++){
-    var w = new Date(y, m-1, d2).getDay();
-    if (c.weekdaysOff.has(w) && !c.onDates.has(d2)){
+    var w2 = new Date(y, m-1, d2).getDay();
+    if (c.weekdaysOff.has(w2) && !c.onDates.has(d2)){
       md[String(d2)] = md[String(d2)] || {work:false,hours:0};
       md[String(d2)].work = false; md[String(d2)].hours = 0;
       continue;
-    }
-    if (c.weekdaysAllowed.size>0 && c.weekdaysAllowed.has(w)){
-      md[String(d2)] = md[String(d2)] || {work:false,hours:0};
-      if (!md[String(d2)].work || overwriteAll){
-        md[String(d2)].work = true;
-        if (overwriteAll || !(md[String(d2)].hours>0)){
-          md[String(d2)].hours = (c.dailyHoursPrefer && c.dailyHoursPrefer>0) ? c.dailyHoursPrefer : DEFAULT_BASE_HOURS;
-        }
-      }
     }
     if (c.holidayOff===true){
       var hn = getHolidayNameByDate(ym, d2);
@@ -386,16 +381,27 @@ function applyWishPlan(plan, overwriteAll){
       }
     }
   }
-  // onDates 強制ON
+
+  // 3) Allowed の日は勤務化（時間は dailyHoursPrefer を優先）
+  for (var d3=1; d3<=dim; d3++){
+    var w3 = new Date(y, m-1, d3).getDay();
+    if (c.weekdaysAllowed.size>0 && c.weekdaysAllowed.has(w3)){
+      md[String(d3)] = md[String(d3)] || {work:false,hours:0};
+      if (overwriteAll || !md[String(d3)].work || !(md[String(d3)].hours>0)){
+        md[String(d3)].work = true;
+        md[String(d3)].hours = (c.dailyHoursPrefer && c.dailyHoursPrefer>0) ? c.dailyHoursPrefer : DEFAULT_BASE_HOURS;
+      }
+    }
+  }
+
+  // 4) onDates は常に勤務
   c.onDates.forEach(function(d){
     md[String(d)] = md[String(d)] || {work:false,hours:0};
     md[String(d)].work = true;
-    if (overwriteAll || !(md[String(d)].hours>0)){
-      md[String(d)].hours = (c.dailyHoursPrefer && c.dailyHoursPrefer>0) ? c.dailyHoursPrefer : DEFAULT_BASE_HOURS;
-    }
+    md[String(d)].hours = (c.dailyHoursPrefer && c.dailyHoursPrefer>0) ? c.dailyHoursPrefer : DEFAULT_BASE_HOURS;
   });
 
-  // 割付反映
+  // 5) 割付（数値調整用）
   plan.entries.forEach(function(e){
     md[String(e.day)] = md[String(e.day)] || {work:false,hours:0};
     var r = md[String(e.day)];
@@ -523,14 +529,15 @@ function renderTotals() {
 
   var projMode = state.ui.projMode || "thismonth";
   var projAnnual = 0;
-  if (projMode === "thismonth") projAnnual = sumWage * 12;
-  else {
+  if (projMode === "thismonth") {
+    projAnnual = sumWage * 12;
+  } else {
     var [year, month] = ym.split("-").map(Number);
     var ytdSum = 0, counted = 0;
     for (var m=1;m<=month;m++){
       var ym2 = year + "-" + pad2(m);
       var md2 = mdAll[ym2] || {};
-      var mh = 0; Object.keys(md2).forEach(k=>{ var rr=md2[k]; if (rr && r.work) mh += Number(rr.hours)||0; });
+      var mh = 0; Object.keys(md2).forEach(k=>{ var rr=md2[k]; if (rr && rr.work) mh += Number(rr.hours)||0; });
       var mw = mh * wage; if (mw>0){ ytdSum += mw; counted++; }
     }
     var avg = counted>0 ? (ytdSum/counted) : 0; var remain = 12 - month;
@@ -726,7 +733,7 @@ document.addEventListener("DOMContentLoaded", function(){
   if (a) a.addEventListener("input", function(){ state.ui.customCaps = state.ui.customCaps||{a:0,b:0}; state.ui.customCaps.a = Number(a.value)||0; saveState(); renderTotals(); });
   if (b) b.addEventListener("input", function(){ state.ui.customCaps = state.ui.customCaps||{a:0,b:0}; state.ui.customCaps.b = Number(b.value)||0; saveState(); renderTotals(); });
 
-  // 希望票：AI解析→即反映（既存入力は尊重）
+  // 希望票：AI解析→即反映（既存入力は一部尊重）
   onClick("wish-parse", function(){
     var txt = ($("#wish-text") && $("#wish-text").value) || "";
     var c = parseWishText(txt);
@@ -739,7 +746,8 @@ document.addEventListener("DOMContentLoaded", function(){
       "週: " + (c.weeklyDays!=null ? (c.weeklyDays + "日") : "—") + " / " + (c.weeklyHours!=null ? (c.weeklyHours + "h") : "—"),
       "祝日: " + (c.holidayOff!=null ? (c.holidayOff?"休":"可") : "可"),
       "曜日OK: " + (c.weekdaysAllowed.size>0 ? Array.from(c.weekdaysAllowed).join(",") : "—"),
-      "曜日NG: " + (c.weekdaysOff.size>0 ? Array.from(c.weekdaysOff).join(",") : "—")
+      "曜日NG: " + (c.weekdaysOff.size>0 ? Array.from(c.weekdaysOff).join(",") : "—"),
+      "のみ: " + (c.allowedIsOnly ? "はい" : "いいえ")
     ].join(" / ");
     var sumEl = $("#wish-summary"); if (sumEl) sumEl.textContent = "解析結果 → " + sum;
 
