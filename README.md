@@ -3,7 +3,7 @@
 ローカルのみで動作する勤怠カレンダー。スタッフごとの出勤簿を管理し、**希望票（日本語テキスト）をAI的に解析して自動割付**します。  
 103/106/130 万円ラインの年収見込みバー、**CSV / Excel(.xlsx) エクスポート**、祝日自動取得、前月→今月コピー等をサポート。
 
-**デモ**（GitHub Pages）: `https://<あなたのGitHubユーザー名>.github.io/<リポジトリ名>/`
+**デモ**（GitHub Pages）: `https://keijisuetsugu.github.io/part-attendance-system/`
 
 ---
 
@@ -44,7 +44,7 @@ docs/report.md
 ## 3. GitHub Pages（公開デモ）
 1. GitHubで新規リポジトリを作成し、上記ファイルをアップロード。
 2. `Settings` → `Pages` → **Branch: `main` / Folder: `/ (root)`** を選択 → `Save`。
-3. 数十秒後、`https://<ユーザー名>.github.io/<リポジトリ名>/` が公開URLになります。
+3. 数十秒後、`https://keijisuetsugu.github.io/part-attendance-system/` が公開URLになります。
 
 ---
 
