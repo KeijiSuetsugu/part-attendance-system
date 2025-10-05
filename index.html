@@ -113,12 +113,9 @@
       <label><input id="wish-keep-existing" type="checkbox" /> 既存の入力を優先（空欄のみ埋める）</label>
     </div>
 
-    <div class="row">
-      <!-- ここを押すだけで解析→適用→再描画まで一気に実行 -->
-      <button id="wish-apply" class="btn primary" type="button"
-        onclick="this.classList.add('btn-active'); if(window.__applyFromWish){window.__applyFromWish();} else {alert('script.js が読み込まれていません');}">
-        AI解析して反映
-      </button>
+    <div class="row" id="wish-buttons">
+      <button id="wish-parse" class="btn" type="button">AI解析</button>
+      <button id="wish-apply" class="btn primary" type="button">AI解析して反映</button>
       <span id="wish-summary" class="muted"></span>
     </div>
 
@@ -197,18 +194,9 @@
   <section class="card stack" aria-labelledby="sec-export-bottom">
     <h2 id="sec-export-bottom" class="section-title">エクスポート（CSV / Excel）</h2>
     <div class="row" id="export-buttons">
-      <button id="export-csv-month" class="btn" type="button"
-        onclick="try{ exportCsvThisMonth(); setActiveExportBtn(this);}catch(e){console.error(e);alert('CSV出力に失敗しました');}">
-        CSV（今月）
-      </button>
-      <button id="export-csv-all" class="btn" type="button"
-        onclick="try{ exportCsvAll(); setActiveExportBtn(this);}catch(e){console.error(e);alert('CSV出力に失敗しました');}">
-        CSV（全スタッフ×全月）
-      </button>
-      <button id="export-xlsx-month" class="btn" type="button"
-        onclick="try{ exportXlsxThisMonth(); setActiveExportBtn(this);}catch(e){console.error(e);alert('Excel出力に失敗しました');}">
-        Excel（今月 .xlsx）
-      </button>
+      <button id="export-csv-month" class="btn" type="button">CSV（今月）</button>
+      <button id="export-csv-all" class="btn" type="button">CSV（全スタッフ×全月）</button>
+      <button id="export-xlsx-month" class="btn" type="button">Excel（今月 .xlsx）</button>
     </div>
     <div class="note">※ クリックしたボタンが青にハイライトされます（直近操作の視覚フィードバック）。</div>
   </section>
@@ -220,10 +208,10 @@
   <!-- アプリ本体 -->
   <script src="script.js"></script>
 
-  <!-- クリック強調用の最小ヘルパ -->
+  <!-- ボタン青ハイライトの最小ヘルパ -->
   <script>
-    function setActiveExportBtn(btn){
-      var wrap = document.getElementById('export-buttons');
+    function setActiveBtnIn(containerId, btn){
+      var wrap = document.getElementById(containerId);
       if(!wrap) return;
       Array.from(wrap.querySelectorAll('button')).forEach(function(b){ b.classList.remove('btn-active'); });
       btn.classList.add('btn-active');
