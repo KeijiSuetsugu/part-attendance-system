@@ -6,24 +6,23 @@
   <title>パート勤怠 & 扶養内シミュレーター</title>
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Excel(.xlsx)用ライブラリを先読み（社内ネットワークでも動作を安定化） -->
+  <!-- Excel(.xlsx)用ライブラリ：事前読込で安定化 -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
 
   <style>
-    /* style.css が無くても最低限崩れない簡易スタイル（必要最小限） */
     :root{--b:#111827;--m:#6b7280;--bd:#e5e7eb;--bg:#fff;--p:#2563eb;--good:#16a34a;--bad:#dc2626;}
     *{box-sizing:border-box}
     body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;margin:16px;color:var(--b);background:#f8fafc;}
     header h1{margin:0 0 8px;}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
     .stack{display:flex;flex-direction:column;gap:10px;}
-    .card{border:1px solid var(--bd);border-radius:14px;padding:12px;background:var(--bg);}
+    .card{border:1px solid var(--bd);border-radius:14px;padding:12px;background:#fff;}
     .muted{color:var(--m);}
     .section-title{font-weight:700;margin:0 0 6px;}
     .tabs{display:flex;gap:8px;flex-wrap:wrap;}
     .tab{padding:6px 10px;border:1px solid #ddd;border-radius:999px;background:#f3f4f6;cursor:pointer;}
     .tab.active{background:#e0f2fe;border-color:#38bdf8;}
-    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;transition:background .15s, color .15s, border-color .15s;}
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
     .btn.primary{background:var(--p);color:#fff;border-color:var(--p);}
     .btn.warn{background:var(--bad);color:#fff;border-color:var(--bad);}
     .btn-active{background:var(--p)!important;color:#fff!important;border-color:var(--p)!important;}
@@ -104,7 +103,7 @@
     </div>
   </section>
 
-  <!-- 希望票（AI解析） -->
+  <!-- 希望票（AI解析 → 反映） -->
   <section class="card stack" aria-labelledby="sec-wish">
     <h2 id="sec-wish" class="section-title">希望票（テキスト貼り付け）→ 反映</h2>
 
@@ -114,9 +113,14 @@
       <label><input id="wish-keep-existing" type="checkbox" /> 既存の入力を優先（空欄のみ埋める）</label>
     </div>
 
-    <!-- 指示どおり、反映ボタンのみ残す -->
+    <!-- 反映ボタンのみ残す（指示通り） -->
     <div class="row">
-      <button id="wish-apply" class="btn primary" type="button">AI解析して反映</button>
+      <button
+        id="wish-apply"
+        class="btn primary"
+        type="button"
+        onclick="handleWishApplyClick(this)"
+      >AI解析して反映</button>
       <span id="wish-summary" class="muted"></span>
     </div>
 
@@ -197,10 +201,18 @@
   <section class="card stack" aria-labelledby="sec-export-bottom">
     <h2 id="sec-export-bottom" class="section-title">エクスポート（CSV / Excel）</h2>
     <div class="row" id="export-buttons">
-      <!-- onclick を直付けして確実に動くようにする -->
-      <button id="export-csv-month" class="btn" type="button" onclick="try{exportCsvThisMonth();}catch(e){console.error(e);alert('CSV出力に失敗しました');}">CSV（今月）</button>
-      <button id="export-csv-all" class="btn" type="button" onclick="try{exportCsvAll();}catch(e){console.error(e);alert('CSV出力に失敗しました');}">CSV（全スタッフ×全月）</button>
-      <button id="export-xlsx-month" class="btn" type="button" onclick="try{exportXlsxThisMonth();}catch(e){console.error(e);alert('Excel出力に失敗しました');}">Excel（今月 .xlsx）</button>
+      <button id="export-csv-month" class="btn" type="button"
+        onclick="try{ exportCsvThisMonth(); setActiveExportBtn(this);}catch(e){console.error(e);alert('CSV出力に失敗しました');}">
+        CSV（今月）
+      </button>
+      <button id="export-csv-all" class="btn" type="button"
+        onclick="try{ exportCsvAll(); setActiveExportBtn(this);}catch(e){console.error(e);alert('CSV出力に失敗しました');}">
+        CSV（全スタッフ×全月）
+      </button>
+      <button id="export-xlsx-month" class="btn" type="button"
+        onclick="try{ exportXlsxThisMonth(); setActiveExportBtn(this);}catch(e){console.error(e);alert('Excel出力に失敗しました');}">
+        Excel（今月 .xlsx）
+      </button>
     </div>
     <div class="note">※ クリックしたボタンが青にハイライトされます（直近操作の視覚フィードバック）。</div>
   </section>
@@ -209,24 +221,63 @@
     <div>ブラウザのみで動作（localStorage に保存）。祝日データ取得に外部APIを使用。</div>
   </footer>
 
-  <!-- 既存のアプリ本体 -->
+  <!-- 既存ロジック -->
   <script src="script.js"></script>
 
-  <!-- クリックしたエクスポートボタンを青で強調（最小JS・本体ロジックは触らない） -->
+  <!-- 最小ヘルパ：AI反映を確実に実行 / クリック強調 -->
   <script>
-    (function(){
-      function wireActiveToggle(ids){
-        var btns = ids.map(function(id){return document.getElementById(id)}).filter(Boolean);
-        function setActive(btn){
-          btns.forEach(function(b){ b.classList.remove('btn-active'); });
-          btn.classList.add('btn-active');
+    // エクスポートの強調
+    function setActiveExportBtn(btn){
+      var wrap = document.getElementById('export-buttons');
+      if(!wrap) return;
+      Array.from(wrap.querySelectorAll('button')).forEach(function(b){ b.classList.remove('btn-active'); });
+      btn.classList.add('btn-active');
+    }
+
+    // 「AI解析して反映」ボタンを確実に動かす（script.js の関数を直接呼び出し）
+    function handleWishApplyClick(btn){
+      try{
+        // クリック強調
+        btn.classList.add('btn-active');
+
+        // 1) テキスト取得 & 解析
+        var txt = (document.getElementById('wish-text') && document.getElementById('wish-text').value) || "";
+        var c = (typeof parseWishText === 'function') ? parseWishText(txt) : null;
+
+        // 解析結果の要約表示（失敗しても処理継続）
+        if (c){
+          var cap = c.preferCapYen ? ("¥"+c.preferCapYen.toLocaleString()) : (c.mentionFuyou ? "（扶養・UI選択準拠）" : "—");
+          var sum = [
+            "上限: " + cap,
+            "1日基準: " + (c.dailyHoursPrefer!=null ? (c.dailyHoursPrefer + "h") : "—"),
+            "週: " + (c.weeklyDays!=null ? (c.weeklyDays + "日") : "—") + " / " + (c.weeklyHours!=null ? (c.weeklyHours + "h") : "—"),
+            "土日: " + (c.weekendPolicy ? (c.weekendPolicy==='on'?'可':'休') : "（UI設定）"),
+            "祝日: " + (c.holidayOff!=null ? (c.holidayOff?'休':'可') : "（UI設定）"),
+          ].join(" / ");
+          var sumEl = document.getElementById('wish-summary'); if (sumEl) sumEl.textContent = "解析結果 → " + sum;
         }
-        btns.forEach(function(b){
-          b.addEventListener('click', function(){ setActive(b); });
-        });
+
+        // 2) 既存優先かどうか
+        var keep = !!(document.getElementById('wish-keep-existing') && document.getElementById('wish-keep-existing').checked);
+
+        // 3) プラン作成 → プレビュー
+        var plan = (typeof planAutoAssignment === 'function') ? planAutoAssignment(state.ui.ym, 6, c || {}, keep) : null;
+        if (typeof renderWishPreview === 'function') renderWishPreview(plan);
+
+        // 4) 適用
+        if (!plan || !plan.entries || plan.entries.length===0){
+          alert("適用できる候補がありません（時給未設定/条件厳しすぎ/既に満たしている など）。");
+          return;
+        }
+        if (typeof applyWishPlan === 'function') applyWishPlan(plan, !keep);
+
+        // 5) 完了フィードバック
+        alert("自動割付を適用しました。");
+      } catch(err){
+        console.error(err);
+        alert("AI解析の実行中にエラーが発生しました。入力内容やブラウザのコンソールをご確認ください。");
       }
-      wireActiveToggle(['export-csv-month','export-csv-all','export-xlsx-month']);
-    })();
+    }
   </script>
 </body>
 </html>
