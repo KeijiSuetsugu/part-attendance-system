@@ -15,7 +15,7 @@
 
 ## 動かし方（もっとも簡単）
 ### 1) 公開デモで試す（おすすめ）
-1. **PAGES_URL** にアクセス  
+1. **https://keijisuetsugu.github.io/part-attendance-system/** にアクセス  
 2. そのまま操作（ローカル保存で次回もデータが残ります）
 
 ### 2) ローカル（PC）で試す
