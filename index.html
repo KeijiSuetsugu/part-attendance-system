@@ -6,55 +6,49 @@
   <title>パート勤怠 & 扶養内シミュレーター</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-    /* style.css が未配置でも最低限崩れないようにする簡易スタイル */
+    /* style.css が無くても最低限崩れない簡易スタイル */
     :root{--b:#111827;--m:#6b7280;--bd:#e5e7eb;--bg:#fff;--p:#2563eb;--good:#16a34a;--bad:#dc2626;}
     *{box-sizing:border-box}
-    body{font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; margin:16px; color:var(--b); background:#f8fafc;}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;margin:16px;color:var(--b);background:#f8fafc;}
     header h1{margin:0 0 8px;}
-    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
-    .stack{display:flex; flex-direction:column; gap:10px;}
-    .card{border:1px solid var(--bd); border-radius:14px; padding:12px; background:var(--bg);}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .stack{display:flex;flex-direction:column;gap:10px;}
+    .card{border:1px solid var(--bd);border-radius:14px;padding:12px;background:var(--bg);}
     .muted{color:var(--m);}
-    .section-title{font-weight:700; margin:0 0 6px;}
-    .tabs{display:flex; gap:8px; flex-wrap:wrap;}
-    .tab{padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#f3f4f6; cursor:pointer;}
-    .tab.active{background:#e0f2fe; border-color:#38bdf8;}
-    .btn{padding:8px 12px; border-radius:10px; border:1px solid #d1d5db; background:#fff; cursor:pointer;}
-    .btn.primary{background:var(--p); color:#fff; border-color:var(--p);}
-    .btn.warn{background:var(--bad); color:#fff; border-color:var(--bad);}
-    .btn.ghost{background:#fff;}
-    .badge{display:inline-block; font-size:12px; padding:2px 6px; border-radius:999px; background:#eef2ff; color:#3730a3; margin-left:6px;}
-    .badge.holiday{background:#fee2e2; color:#991b1b;}
-    #calendar{display:grid; grid-template-columns: repeat(7, 1fr); gap:8px;}
-    .day-head{font-weight:700; text-align:center; color:#64748b;}
-    .day-cell{border:1px solid var(--bd); border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:6px; background:#fff;}
-    .day-title{display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;}
-    .toggle{padding:6px 10px; border-radius:999px; text-align:center; cursor:pointer; user-select:none;}
-    .toggle.on{background:#dcfce7; color:#166534; border:1px solid #22c55e;}
-    .toggle.off{background:#fee2e2; color:#991b1b; border:1px solid #ef4444;}
-    .time-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
-    .time-row input[type="number"]{flex:1 1 120px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;}
-    .val-pill{min-width:64px; text-align:right; font-variant-numeric: tabular-nums; padding:4px 8px; border-radius:999px; background:#f1f5f9; color:#0f172a;}
-    .stepper{display:flex; gap:4px;}
-    .btn-step{padding:4px 8px; border-radius:6px; border:1px solid #d1d5db; background:#fff; cursor:pointer;}
-    .help{font-size:12px; color:#64748b;}
-    .kpi{display:flex; gap:16px; flex-wrap:wrap;}
+    .section-title{font-weight:700;margin:0 0 6px;}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;}
+    .tab{padding:6px 10px;border:1px solid #ddd;border-radius:999px;background:#f3f4f6;cursor:pointer;}
+    .tab.active{background:#e0f2fe;border-color:#38bdf8;}
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;}
+    .btn.primary{background:var(--p);color:#fff;border-color:var(--p);}
+    .btn.warn{background:var(--bad);color:#fff;border-color:var(--bad);}
+    .badge{display:inline-block;font-size:12px;padding:2px 6px;border-radius:999px;background:#eef2ff;color:#3730a3;margin-left:6px;}
+    .badge.holiday{background:#fee2e2;color:#991b1b;}
+    #calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
+    .day-head{font-weight:700;text-align:center;color:#64748b;}
+    .day-cell{border:1px solid var(--bd);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;background:#fff;}
+    .day-title{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;}
+    .toggle{padding:6px 10px;border-radius:999px;text-align:center;cursor:pointer;user-select:none;}
+    .toggle.on{background:#dcfce7;color:#166534;border:1px solid #22c55e;}
+    .toggle.off{background:#fee2e2;color:#991b1b;border:1px solid #ef4444;}
+    .time-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .time-row input[type="number"]{flex:1 1 120px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;}
+    .val-pill{min-width:64px;text-align:right;font-variant-numeric:tabular-nums;padding:4px 8px;border-radius:999px;background:#f1f5f9;color:#0f172a;}
+    .stepper{display:flex;gap:4px;}
+    .btn-step{padding:4px 8px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;}
+    .help{font-size:12px;color:#64748b;}
+    .kpi{display:flex;gap:16px;flex-wrap:wrap;}
     .kpi-item{min-width:180px;}
-    .bar-row{display:flex; align-items:center; gap:8px;}
-    progress{width:220px; height:12px;}
-    table{width:100%; border-collapse:collapse;}
-    th, td{border:1px solid var(--bd); padding:6px 8px; text-align:center;}
+    .bar-row{display:flex;align-items:center;gap:8px;}
+    progress{width:220px;height:12px;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{border:1px solid var(--bd);padding:6px 8px;text-align:center;}
     th.month{width:80px;}
-    .export-row, .copy-row{display:flex; gap:8px; flex-wrap:wrap;}
-    .note{font-size:12px; color:#6b7280;}
-    textarea{width:100%; min-height:120px; padding:8px; border:1px solid #d1d5db; border-radius:8px;}
-    input[type="text"], input[type="number"], input[type="month"], select{padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;}
-    @media (max-width: 560px){
-      #calendar{gap:6px;}
-      .day-cell{padding:6px;}
-      .val-pill{min-width:54px;}
-      progress{width:160px;}
-    }
+    .export-row,.copy-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .note{font-size:12px;color:#6b7280;}
+    textarea{width:100%;min-height:120px;padding:8px;border:1px solid #d1d5db;border-radius:8px;}
+    input[type="text"],input[type="number"],input[type="month"],select{padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;}
+    @media (max-width:560px){#calendar{gap:6px}.day-cell{padding:6px}.val-pill{min-width:54px}progress{width:160px}}
   </style>
 </head>
 <body>
@@ -63,6 +57,17 @@
     <h1>パート勤怠 & 扶養内シミュレーター</h1>
     <div class="note" id="holiday-status">祝日データ：—</div>
   </header>
+
+  <!-- ★ エクスポートを最上部にも配置（見落とし防止） -->
+  <section class="card stack" aria-labelledby="sec-export-top">
+    <h2 id="sec-export-top" class="section-title">エクスポート（CSV / Excel）</h2>
+    <div class="export-row">
+      <button id="export-csv-month" class="btn" type="button">CSV（今月）</button>
+      <button id="export-csv-all" class="btn" type="button">CSV（全スタッフ×全月）</button>
+      <button id="export-xlsx-month" class="btn primary" type="button">Excel（今月 .xlsx）</button>
+    </div>
+    <div class="note">※ Excel 出力は CDN からライブラリ（xlsx）を自動読み込みします。</div>
+  </section>
 
   <!-- スタッフ管理 -->
   <section class="card stack" aria-labelledby="sec-staff">
@@ -82,7 +87,7 @@
       <button id="del-emp" class="btn warn" type="button">− スタッフ削除</button>
       <button id="move-left" class="btn" type="button">← 左へ</button>
       <button id="move-right" class="btn" type="button">→ 右へ</button>
-      <button id="reset-data" class="btn ghost" type="button" title="保存データ（ブラウザ内）を全削除">データ初期化</button>
+      <button id="reset-data" class="btn" type="button" title="保存データ（ブラウザ内）を全削除">データ初期化</button>
     </div>
   </section>
 
@@ -208,26 +213,12 @@
     <div id="year-summary" class="stack"></div>
   </section>
 
-  <!-- 前月コピー & エクスポート（CSV / Excel） -->
-  <section class="card stack" aria-labelledby="sec-io">
-    <h2 id="sec-io" class="section-title">前月コピー & エクスポート</h2>
-
+  <!-- 前月コピー（参考：ここにはエクスポートは置かず、上に集約） -->
+  <section class="card stack" aria-labelledby="sec-copy">
+    <h2 id="sec-copy" class="section-title">前月コピー</h2>
     <div class="copy-row">
       <button id="copy-prev-fill" class="btn" type="button" title="前月の内容を空欄だけ埋める">前月→今月（空欄のみ）</button>
       <button id="copy-prev-overwrite" class="btn warn" type="button" title="今月を前月で上書き">前月→今月（全て上書き）</button>
-    </div>
-
-    <!-- ★ ここがダウンロードボタン一式（script.js とID連携済み） -->
-    <div class="export-row" style="margin-top:8px;">
-      <button id="export-csv-month" class="btn" type="button">CSV（今月）</button>
-      <button id="export-csv-all" class="btn" type="button">CSV（全スタッフ×全月）</button>
-      <button id="export-xlsx-month" class="btn primary" type="button">Excel（今月 .xlsx）</button>
-    </div>
-
-    <div class="note">
-      ※ Excel 出力は CDN からライブラリ（xlsx）を自動読み込みします。社内ネットワークでCDNがブロックされる場合は<br />
-      &nbsp;&nbsp;`index.html` の &lt;head&gt; に次を追記してください：<br />
-      &nbsp;&nbsp;<code>&lt;script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"&gt;&lt;/script&gt;</code>
     </div>
   </section>
 
