@@ -6,7 +6,7 @@
   <title>パート勤怠 & 扶養内シミュレーター</title>
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Excel(.xlsx)用ライブラリ（事前読み込みで安定） -->
+  <!-- Excel(.xlsx)用ライブラリ：事前読込で安定化 -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
 
   <style>
@@ -113,46 +113,12 @@
       <label><input id="wish-keep-existing" type="checkbox" /> 既存の入力を優先（空欄のみ埋める）</label>
     </div>
 
-    <!-- 反映ボタンのみ -->
     <div class="row">
-      <!-- ★ ここで script.js の関数を“直接”呼ぶので、必ず反応します -->
-      <button
-        id="wish-apply"
-        class="btn primary"
-        type="button"
-        onclick="(function(btn){
-          try{
-            // ボタン強調
-            btn.classList.add('btn-active');
-
-            // 1) テキスト解析
-            var txt = (document.getElementById('wish-text') && document.getElementById('wish-text').value) || '';
-            if(typeof parseWishText !== 'function'){ alert('script.js が読み込まれていません。'); return; }
-            var c = parseWishText(txt);
-
-            // 2) 既存優先
-            var keep = !!(document.getElementById('wish-keep-existing') && document.getElementById('wish-keep-existing').checked);
-
-            // 3) プラン作成（標準シフトUIは廃止：解析結果 or デフォルト6h）
-            if(typeof planAutoAssignment !== 'function'){ alert('planAutoAssignment が見つかりません。'); return; }
-            var plan = planAutoAssignment(state.ui.ym, 6, c || {}, keep);
-
-            // 4) プレビュー表示（任意）
-            if(typeof renderWishPreview === 'function'){ renderWishPreview(plan); }
-
-            // 5) 適用→カレンダー再描画
-            if(!plan || !plan.entries || plan.entries.length===0){ alert('適用できる候補がありません。'); return; }
-            if(typeof applyWishPlan !== 'function'){ alert('applyWishPlan が見つかりません。'); return; }
-            applyWishPlan(plan, !keep); // 上書き方針：既存優先のチェックに応じる
-
-            // 完了フィードバック
-            alert('自動割付を適用しました。');
-          }catch(e){
-            console.error(e);
-            alert('AI解析の実行中にエラーが発生しました。コンソールをご確認ください。');
-          }
-        })(this)"
-      >AI解析して反映</button>
+      <!-- ここを押すだけで解析→適用→再描画まで一気に実行 -->
+      <button id="wish-apply" class="btn primary" type="button"
+        onclick="this.classList.add('btn-active'); if(window.__applyFromWish){window.__applyFromWish();} else {alert('script.js が読み込まれていません');}">
+        AI解析して反映
+      </button>
       <span id="wish-summary" class="muted"></span>
     </div>
 
@@ -162,9 +128,7 @@
   <!-- カレンダー -->
   <section class="card stack" aria-labelledby="sec-cal">
     <h2 id="sec-cal" class="section-title">出勤簿（カレンダー）</h2>
-
     <div id="calendar"></div>
-
     <div class="note">
       ※ 各日の「出勤/休み」をタップして切替。勤務時間は数値を入力（30分＝0.5）。<br />
       ※ スマホでも数字が見やすいよう、右側に現在値のバッジを表示します。
@@ -233,7 +197,6 @@
   <section class="card stack" aria-labelledby="sec-export-bottom">
     <h2 id="sec-export-bottom" class="section-title">エクスポート（CSV / Excel）</h2>
     <div class="row" id="export-buttons">
-      <!-- インライン呼び出し（確実に動作）＋ クリックで青ハイライト -->
       <button id="export-csv-month" class="btn" type="button"
         onclick="try{ exportCsvThisMonth(); setActiveExportBtn(this);}catch(e){console.error(e);alert('CSV出力に失敗しました');}">
         CSV（今月）
@@ -254,10 +217,10 @@
     <div>ブラウザのみで動作（localStorage に保存）。祝日データ取得に外部APIを使用。</div>
   </footer>
 
-  <!-- アプリ本体（既存の script.js を読み込む） -->
+  <!-- アプリ本体 -->
   <script src="script.js"></script>
 
-  <!-- クリック強調用の最小ヘルパ（依存なし） -->
+  <!-- クリック強調用の最小ヘルパ -->
   <script>
     function setActiveExportBtn(btn){
       var wrap = document.getElementById('export-buttons');
