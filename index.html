@@ -1,143 +1,232 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <title>パート出勤簿（AI希望票 連動）</title>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>パート勤怠 & 扶養内シミュレーター</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* 最低限の安全ネット（style.css がない/未反映でも体裁が崩れにくくする） */
+    body{font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; margin:16px; color:#222;}
+    header h1{margin:0 0 8px;}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .stack{display:flex; flex-direction:column; gap:8px;}
+    .card{border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fff;}
+    .muted{color:#666;}
+    .section-title{font-weight:700; margin:0 0 8px;}
+    .tabs{display:flex; gap:8px; flex-wrap:wrap;}
+    .tab{padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#f8fafc; cursor:pointer;}
+    .tab.active{background:#e0f2fe; border-color:#38bdf8;}
+    .btn{padding:8px 12px; border-radius:8px; border:1px solid #d1d5db; background:#f3f4f6; cursor:pointer;}
+    .btn.primary{background:#2563eb; color:#fff; border-color:#2563eb;}
+    .btn.warn{background:#ef4444; color:#fff; border-color:#ef4444;}
+    .btn.ghost{background:#fff;}
+    .badge{display:inline-block; font-size:12px; padding:2px 6px; border-radius:999px; background:#eef2ff; color:#3730a3; margin-left:6px;}
+    .badge.holiday{background:#fee2e2; color:#991b1b;}
+    .grid{display:grid; gap:8px;}
+    #calendar{display:grid; grid-template-columns: repeat(7, 1fr); gap:8px;}
+    .day-head{font-weight:700; text-align:center; color:#64748b;}
+    .day-cell{border:1px solid #e5e7eb; border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:6px; background:#fff;}
+    .day-title{display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;}
+    .toggle{padding:6px 10px; border-radius:999px; text-align:center; cursor:pointer; user-select:none;}
+    .toggle.on{background:#dcfce7; color:#166534; border:1px solid #22c55e;}
+    .toggle.off{background:#fee2e2; color:#991b1b; border:1px solid #ef4444;}
+    .time-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .time-row input[type="number"]{flex:1 1 120px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;}
+    .val-pill{min-width:60px; text-align:right; font-variant-numeric: tabular-nums; padding:4px 8px; border-radius:999px; background:#f1f5f9; color:#0f172a;}
+    .stepper{display:flex; gap:4px;}
+    .btn-step{padding:4px 8px; border-radius:6px; border:1px solid #d1d5db; background:#fff; cursor:pointer;}
+    .help{font-size:12px; color:#64748b;}
+    .kpi{display:flex; gap:16px; flex-wrap:wrap;}
+    .kpi-item{min-width:180px;}
+    .bar-row{display:flex; align-items:center; gap:8px;}
+    progress{width:220px; height:12px;}
+    table{width:100%; border-collapse:collapse;}
+    th, td{border:1px solid #e5e7eb; padding:6px 8px; text-align:center;}
+    th.month{width:80px;}
+    .export-row, .copy-row{display:flex; gap:8px; flex-wrap:wrap;}
+    .note{font-size:12px; color:#6b7280;}
+    @media (max-width: 520px){
+      #calendar{gap:6px;}
+      .day-cell{padding:6px;}
+      .val-pill{min-width:54px;}
+      progress{width:160px;}
+    }
+  </style>
 </head>
 <body>
-  <header class="topbar">
-    <h1>パート出勤簿</h1>
-    <div id="holiday-status" class="muted">祝日データ：—</div>
+
+  <header class="stack">
+    <h1>パート勤怠 & 扶養内シミュレーター</h1>
+    <div class="note" id="holiday-status">祝日データ：—</div>
   </header>
 
-  <section class="row">
-    <div class="card">
-      <h2>スタッフ</h2>
-      <div id="emp-tabs" class="tabs"></div>
-      <div class="grid2">
-        <label>氏名 <input id="emp-name" placeholder="山田 花子" /></label>
-        <label>時給(円) <input id="emp-wage" type="number" inputmode="numeric" placeholder="1200" /></label>
-      </div>
-      <div class="btns">
-        <button id="save-emp" class="primary">保存</button>
-        <button id="add-emp">追加</button>
-        <button id="del-emp" class="warn">削除</button>
-        <button id="move-left">←</button>
-        <button id="move-right">→</button>
-        <button id="reset-data" class="ghost">全消去</button>
-      </div>
-      <div id="emp-msg" class="muted"></div>
+  <!-- スタッフ タブ ＋ 基本情報 -->
+  <section class="card stack" aria-labelledby="sec-staff">
+    <h2 id="sec-staff" class="section-title">スタッフ管理</h2>
+
+    <div id="emp-tabs" class="tabs"></div>
+
+    <div class="row">
+      <label>氏名 <input id="emp-name" type="text" placeholder="例：山田 花子" /></label>
+      <label>時給(円) <input id="emp-wage" type="number" inputmode="numeric" min="0" step="1" style="width:120px;" /></label>
+      <button id="save-emp" class="btn primary" type="button">保存</button>
+      <span id="emp-msg" class="muted"></span>
     </div>
 
-    <div class="card">
-      <h2>表示月</h2>
-      <div class="monthbar">
-        <button id="prev-month">◀</button>
-        <input id="month-picker" type="month" />
-        <button id="next-month">▶</button>
-        <label class="right">年集計 年
-          <input id="year-picker" type="number" min="2000" max="2100" />
-        </label>
+    <div class="row">
+      <button id="add-emp" class="btn" type="button">＋ スタッフ追加</button>
+      <button id="del-emp" class="btn warn" type="button">− スタッフ削除</button>
+      <button id="move-left" class="btn" type="button">← 左へ</button>
+      <button id="move-right" class="btn" type="button">→ 右へ</button>
+      <button id="reset-data" class="btn ghost" type="button" title="保存データ（ブラウザ内）を全削除">データ初期化</button>
+    </div>
+  </section>
+
+  <!-- 月切替／年指定・予測モード -->
+  <section class="card stack" aria-labelledby="sec-month">
+    <h2 id="sec-month" class="section-title">対象月 & 集計モード</h2>
+
+    <div class="row">
+      <button id="prev-month" class="btn" type="button">← 前月</button>
+      <input id="month-picker" type="month" />
+      <button id="next-month" class="btn" type="button">翌月 →</button>
+
+      <span class="badge">年選択</span>
+      <input id="year-picker" type="number" step="1" style="width:100px;" />
+
+      <span class="badge">年収見込み</span>
+      <select id="proj-mode">
+        <option value="thismonth">今月×12（単月×12）</option>
+        <option value="ytdavg">YTD平均×残り月（推奨）</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- 希望票（AI解析） -->
+  <section class="card stack" aria-labelledby="sec-wish">
+    <h2 id="sec-wish" class="section-title">希望票（テキスト貼り付け）→ AI解析</h2>
+
+    <textarea id="wish-text" rows="5" placeholder="例）扶養の範囲内で。月・火・木のみ出勤。勤務時間は4時間。祝日は休み。&#10;15日は休み、22日は入れます。"></textarea>
+
+    <div class="row">
+      <label><input id="wish-keep-existing" type="checkbox" /> 既存の入力を優先（空欄のみ埋める）</label>
+    </div>
+
+    <div class="row">
+      <button id="wish-parse" class="btn" type="button">AI解析</button>
+      <button id="wish-preview-btn" class="btn" type="button">プレビュー更新</button>
+      <button id="wish-apply" class="btn primary" type="button">AI解析して反映</button>
+      <span id="wish-summary" class="muted"></span>
+    </div>
+
+    <div id="wish-preview" class="card muted">プレビューなし</div>
+  </section>
+
+  <!-- カレンダー -->
+  <section class="card stack" aria-labelledby="sec-cal">
+    <h2 id="sec-cal" class="section-title">出勤簿（カレンダー）</h2>
+    <div id="calendar"></div>
+
+    <div class="note">
+      ※ 各日の「出勤/休み」をタップして切替。勤務時間は数値を入力（30分＝0.5）。<br />
+      ※ スマホでも数字が見やすいよう、右側に現在値のバッジを表示します。
+    </div>
+  </section>
+
+  <!-- 月次集計 & 年収見込み -->
+  <section class="card stack" aria-labelledby="sec-agg">
+    <h2 id="sec-agg" class="section-title">月次集計 & 年収見込み</h2>
+
+    <div class="kpi">
+      <div class="kpi-item">合計時間：<strong id="sum-hours">0.00 h</strong></div>
+      <div class="kpi-item">合計賃金：<strong id="sum-wage">¥0</strong></div>
+      <div class="kpi-item">年収見込み：<strong id="proj-annual">¥0</strong></div>
+    </div>
+
+    <div class="stack">
+      <div class="bar-row">
+        <span class="badge">103万円</span>
+        <progress id="bar-103" max="100" value="0"></progress>
+        <span id="pct-103">0%</span>
       </div>
-      <div class="muted small" id="proj-wrap">
-        年収見込みモード：
-        <select id="proj-mode">
-          <option value="thismonth">今月×12</option>
-          <option value="ytdavg">月平均×残り月</option>
+      <div class="bar-row">
+        <span class="badge">106万円</span>
+        <progress id="bar-106" max="100" value="0"></progress>
+        <span id="pct-106">0%</span>
+      </div>
+      <div class="bar-row">
+        <span class="badge">130万円</span>
+        <progress id="bar-130" max="100" value="0"></progress>
+        <span id="pct-130">0%</span>
+      </div>
+
+      <div class="row">
+        <label>カスタムA(円/年) <input id="th-custom-a" type="number" inputmode="numeric" min="0" step="10000" style="width:140px;" /></label>
+        <span class="bar-row"><progress id="bar-custom-a" max="100" value="0"></progress><span id="pct-custom-a">0%</span></span>
+      </div>
+      <div class="row">
+        <label>カスタムB(円/年) <input id="th-custom-b" type="number" inputmode="numeric" min="0" step="10000" style="width:140px;" /></label>
+        <span class="bar-row"><progress id="bar-custom-b" max="100" value="0"></progress><span id="pct-custom-b">0%</span></span>
+      </div>
+
+      <div id="warn" class="muted"></div>
+    </div>
+  </section>
+
+  <!-- 扶養シミュレーター（上限→月あたり目安） -->
+  <section class="card stack" aria-labelledby="sec-sim">
+    <h2 id="sec-sim" class="section-title">扶養シミュレーター（上限→月あたり目安）</h2>
+
+    <div class="row">
+      <label>上限選択
+        <select id="cap-select">
+          <option value="">選択してください</option>
+          <option value="1030000">103万円</option>
+          <option value="1060000">106万円</option>
+          <option value="1300000">130万円</option>
+          <option value="custom">カスタム</option>
         </select>
-      </div>
+      </label>
+      <label>カスタム上限(円/年) <input id="cap-custom" type="number" inputmode="numeric" min="0" step="10000" style="width:140px;" disabled /></label>
+      <label>時給(円) <input id="cap-wage" type="number" inputmode="numeric" min="0" step="1" style="width:120px;" /></label>
+      <label>月上限(目安) <input id="cap-hours" type="text" readonly style="width:140px;" /></label>
+    </div>
+    <div id="sim-cap-summary" class="muted">シミュレーター設定：—</div>
+  </section>
+
+  <!-- 年間サマリー -->
+  <section class="card stack" aria-labelledby="sec-year">
+    <h2 id="sec-year" class="section-title">年間サマリー（各月×金額/時間）</h2>
+    <div class="row">
+      <button id="refresh-summary" class="btn" type="button">再計算</button>
+    </div>
+    <div id="year-summary" class="stack"></div>
+  </section>
+
+  <!-- 前月コピー & エクスポート -->
+  <section class="card stack" aria-labelledby="sec-io">
+    <h2 id="sec-io" class="section-title">前月コピー & エクスポート</h2>
+
+    <div class="copy-row">
+      <button id="copy-prev-fill" class="btn" type="button" title="前月の内容を空欄だけ埋める">前月→今月（空欄のみ）</button>
+      <button id="copy-prev-overwrite" class="btn warn" type="button" title="今月を前月で上書き">前月→今月（全て上書き）</button>
+    </div>
+
+    <div class="export-row" style="margin-top:8px;">
+      <button id="export-csv-month" class="btn" type="button">CSV（今月）</button>
+      <button id="export-csv-all" class="btn" type="button">CSV（全スタッフ×全月）</button>
+      <button id="export-xlsx-month" class="btn" type="button">Excel（今月 .xlsx）</button>
+    </div>
+
+    <div class="note">
+      ※ Excel 出力は CDN からライブラリ（xlsx）を自動読み込みします。社内ネットワークでブロックされる場合は管理者へご相談ください。
     </div>
   </section>
 
-  <section class="row">
-    <div class="card">
-      <h2>希望票（テキスト貼り付け）</h2>
-      <textarea id="wish-text" rows="7" placeholder="例）扶養内希望。祝日は休み。平日中心で週3日、1日6h。15日と22日は休み、8日と29日は入れます。"></textarea>
-      <div class="btns">
-        <button id="wish-parse" class="primary">AI解析 → カレンダーに反映</button>
-      </div>
-      <div id="wish-summary" class="muted"></div>
-      <div id="wish-preview" class="preview"></div>
-    </div>
-  </section>
-
-  <section class="row">
-    <div class="card full">
-      <h2>出勤簿（カレンダー）</h2>
-      <div id="calendar" class="calendar"></div>
-    </div>
-  </section>
-
-  <section class="row">
-    <div class="card">
-      <h2>月次集計 & 年収見込み</h2>
-      <div class="totals">
-        <div>今月の合計時間：<strong id="sum-hours">0.00 h</strong></div>
-        <div>今月の金額：<strong id="sum-wage">¥0</strong></div>
-        <div>年収見込み：<strong id="proj-annual">¥0</strong></div>
-      </div>
-      <div class="bars">
-        <div class="bar">
-          <label>103万円</label>
-          <progress id="bar-103" max="100" value="0"></progress>
-          <span id="pct-103" class="pct">0%</span>
-        </div>
-        <div class="bar">
-          <label>106万円</label>
-          <progress id="bar-106" max="100" value="0"></progress>
-          <span id="pct-106" class="pct">0%</span>
-        </div>
-        <div class="bar">
-          <label>130万円</label>
-          <progress id="bar-130" max="100" value="0"></progress>
-          <span id="pct-130" class="pct">0%</span>
-        </div>
-        <div class="bar">
-          <label>カスタムA</label>
-          <input id="th-custom-a" type="number" placeholder="例 1200000" />
-          <progress id="bar-custom-a" max="100" value="0"></progress>
-          <span id="pct-custom-a" class="pct">0%</span>
-        </div>
-        <div class="bar">
-          <label>カスタムB</label>
-          <input id="th-custom-b" type="number" placeholder="例 900000" />
-          <progress id="bar-custom-b" max="100" value="0"></progress>
-          <span id="pct-custom-b" class="pct">0%</span>
-        </div>
-      </div>
-      <div id="warn" class="warn"></div>
-      <hr/>
-      <div class="sim">
-        <h3>扶養シミュレーター（上限 → 月上限時間）</h3>
-        <div class="grid3">
-          <label>上限選択
-            <select id="cap-select">
-              <option value="">未指定</option>
-              <option value="1030000">103万円</option>
-              <option value="1060000">106万円</option>
-              <option value="1300000">130万円</option>
-              <option value="custom">カスタム</option>
-            </select>
-          </label>
-          <label>カスタム上限(円)
-            <input id="cap-custom" type="number" placeholder="例 1200000" disabled />
-          </label>
-          <label>時給(自動)
-            <input id="cap-wage" type="number" disabled />
-          </label>
-        </div>
-        <div class="muted" id="sim-cap-summary">シミュレーター設定：—</div>
-        <div>月あたり上限時間：<input id="cap-hours" readonly /></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>年間サマリー</h2>
-      <div id="year-summary"></div>
-    </div>
-  </section>
+  <footer class="stack muted" style="margin-top:16px;">
+    <div>ブラウザのみで動作（localStorage に保存）。祝日データ取得に外部APIを使用。</div>
+  </footer>
 
   <script src="script.js"></script>
 </body>
