@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>パート勤怠 & 扶養内シミュレーター</title>
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Excel(.xlsx)用ライブラリを先読み（社内ネットワークでも動作を安定化） -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
+
   <style>
-    /* style.css が無くても最低限崩れない簡易スタイル */
+    /* style.css が無くても最低限崩れない簡易スタイル（必要最小限） */
     :root{--b:#111827;--m:#6b7280;--bd:#e5e7eb;--bg:#fff;--p:#2563eb;--good:#16a34a;--bad:#dc2626;}
     *{box-sizing:border-box}
     body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;margin:16px;color:var(--b);background:#f8fafc;}
@@ -19,9 +23,10 @@
     .tabs{display:flex;gap:8px;flex-wrap:wrap;}
     .tab{padding:6px 10px;border:1px solid #ddd;border-radius:999px;background:#f3f4f6;cursor:pointer;}
     .tab.active{background:#e0f2fe;border-color:#38bdf8;}
-    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;}
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;transition:background .15s, color .15s, border-color .15s;}
     .btn.primary{background:var(--p);color:#fff;border-color:var(--p);}
     .btn.warn{background:var(--bad);color:#fff;border-color:var(--bad);}
+    .btn-active{background:var(--p)!important;color:#fff!important;border-color:var(--p)!important;}
     .badge{display:inline-block;font-size:12px;padding:2px 6px;border-radius:999px;background:#eef2ff;color:#3730a3;margin-left:6px;}
     .badge.holiday{background:#fee2e2;color:#991b1b;}
     #calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
@@ -44,7 +49,6 @@
     table{width:100%;border-collapse:collapse;}
     th,td{border:1px solid var(--bd);padding:6px 8px;text-align:center;}
     th.month{width:80px;}
-    .export-row,.copy-row{display:flex;gap:8px;flex-wrap:wrap;}
     .note{font-size:12px;color:#6b7280;}
     textarea{width:100%;min-height:120px;padding:8px;border:1px solid #d1d5db;border-radius:8px;}
     input[type="text"],input[type="number"],input[type="month"],select{padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;}
@@ -57,17 +61,6 @@
     <h1>パート勤怠 & 扶養内シミュレーター</h1>
     <div class="note" id="holiday-status">祝日データ：—</div>
   </header>
-
-  <!-- ★ エクスポートを最上部にも配置（見落とし防止） -->
-  <section class="card stack" aria-labelledby="sec-export-top">
-    <h2 id="sec-export-top" class="section-title">エクスポート（CSV / Excel）</h2>
-    <div class="export-row">
-      <button id="export-csv-month" class="btn" type="button">CSV（今月）</button>
-      <button id="export-csv-all" class="btn" type="button">CSV（全スタッフ×全月）</button>
-      <button id="export-xlsx-month" class="btn primary" type="button">Excel（今月 .xlsx）</button>
-    </div>
-    <div class="note">※ Excel 出力は CDN からライブラリ（xlsx）を自動読み込みします。</div>
-  </section>
 
   <!-- スタッフ管理 -->
   <section class="card stack" aria-labelledby="sec-staff">
@@ -113,7 +106,7 @@
 
   <!-- 希望票（AI解析） -->
   <section class="card stack" aria-labelledby="sec-wish">
-    <h2 id="sec-wish" class="section-title">希望票（テキスト貼り付け）→ AI解析</h2>
+    <h2 id="sec-wish" class="section-title">希望票（テキスト貼り付け）→ 反映</h2>
 
     <textarea id="wish-text" placeholder="例）扶養の範囲内で。月・火・木のみ出勤。勤務時間は4時間。祝日は休み。&#10;15日は休み、22日は入れます。"></textarea>
 
@@ -121,9 +114,8 @@
       <label><input id="wish-keep-existing" type="checkbox" /> 既存の入力を優先（空欄のみ埋める）</label>
     </div>
 
+    <!-- 指示どおり、反映ボタンのみ残す -->
     <div class="row">
-      <button id="wish-parse" class="btn" type="button">AI解析</button>
-      <button id="wish-preview-btn" class="btn" type="button">プレビュー更新</button>
       <button id="wish-apply" class="btn primary" type="button">AI解析して反映</button>
       <span id="wish-summary" class="muted"></span>
     </div>
@@ -183,27 +175,6 @@
     </div>
   </section>
 
-  <!-- 扶養シミュレーター（上限→月あたり目安） -->
-  <section class="card stack" aria-labelledby="sec-sim">
-    <h2 id="sec-sim" class="section-title">扶養シミュレーター（上限→月あたり目安）</h2>
-
-    <div class="row">
-      <label>上限選択
-        <select id="cap-select">
-          <option value="">選択してください</option>
-          <option value="1030000">103万円</option>
-          <option value="1060000">106万円</option>
-          <option value="1300000">130万円</option>
-          <option value="custom">カスタム</option>
-        </select>
-      </label>
-      <label>カスタム上限(円/年) <input id="cap-custom" type="number" inputmode="numeric" min="0" step="10000" style="width:140px;" disabled /></label>
-      <label>時給(円) <input id="cap-wage" type="number" inputmode="numeric" min="0" step="1" style="width:120px;" /></label>
-      <label>月上限(目安) <input id="cap-hours" type="text" readonly style="width:140px;" /></label>
-    </div>
-    <div id="sim-cap-summary" class="muted">シミュレーター設定：—</div>
-  </section>
-
   <!-- 年間サマリー -->
   <section class="card stack" aria-labelledby="sec-year">
     <h2 id="sec-year" class="section-title">年間サマリー（各月×金額/時間）</h2>
@@ -213,19 +184,49 @@
     <div id="year-summary" class="stack"></div>
   </section>
 
-  <!-- 前月コピー（参考：ここにはエクスポートは置かず、上に集約） -->
+  <!-- 前月コピー -->
   <section class="card stack" aria-labelledby="sec-copy">
     <h2 id="sec-copy" class="section-title">前月コピー</h2>
-    <div class="copy-row">
+    <div class="row">
       <button id="copy-prev-fill" class="btn" type="button" title="前月の内容を空欄だけ埋める">前月→今月（空欄のみ）</button>
       <button id="copy-prev-overwrite" class="btn warn" type="button" title="今月を前月で上書き">前月→今月（全て上書き）</button>
     </div>
+  </section>
+
+  <!-- ★ 一番下：エクスポート（CSV / Excel） -->
+  <section class="card stack" aria-labelledby="sec-export-bottom">
+    <h2 id="sec-export-bottom" class="section-title">エクスポート（CSV / Excel）</h2>
+    <div class="row" id="export-buttons">
+      <!-- onclick を直付けして確実に動くようにする -->
+      <button id="export-csv-month" class="btn" type="button" onclick="try{exportCsvThisMonth();}catch(e){console.error(e);alert('CSV出力に失敗しました');}">CSV（今月）</button>
+      <button id="export-csv-all" class="btn" type="button" onclick="try{exportCsvAll();}catch(e){console.error(e);alert('CSV出力に失敗しました');}">CSV（全スタッフ×全月）</button>
+      <button id="export-xlsx-month" class="btn" type="button" onclick="try{exportXlsxThisMonth();}catch(e){console.error(e);alert('Excel出力に失敗しました');}">Excel（今月 .xlsx）</button>
+    </div>
+    <div class="note">※ クリックしたボタンが青にハイライトされます（直近操作の視覚フィードバック）。</div>
   </section>
 
   <footer class="stack muted" style="margin-top:16px;">
     <div>ブラウザのみで動作（localStorage に保存）。祝日データ取得に外部APIを使用。</div>
   </footer>
 
+  <!-- 既存のアプリ本体 -->
   <script src="script.js"></script>
+
+  <!-- クリックしたエクスポートボタンを青で強調（最小JS・本体ロジックは触らない） -->
+  <script>
+    (function(){
+      function wireActiveToggle(ids){
+        var btns = ids.map(function(id){return document.getElementById(id)}).filter(Boolean);
+        function setActive(btn){
+          btns.forEach(function(b){ b.classList.remove('btn-active'); });
+          btn.classList.add('btn-active');
+        }
+        btns.forEach(function(b){
+          b.addEventListener('click', function(){ setActive(b); });
+        });
+      }
+      wireActiveToggle(['export-csv-month','export-csv-all','export-xlsx-month']);
+    })();
+  </script>
 </body>
 </html>
