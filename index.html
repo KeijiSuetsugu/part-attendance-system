@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>パート勤怠 & 扶養内シミュレーター</title>
   <link rel="stylesheet" href="style.css" />
-
-  <!-- Excel(.xlsx)用ライブラリ：事前読込で安定化 -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
-
   <style>
-    :root{--b:#111827;--m:#6b7280;--bd:#e5e7eb;--bg:#fff;--p:#2563eb;--good:#16a34a;--bad:#dc2626;}
+    :root{--b:#111827;--m:#6b7280;--bd:#e5e7eb;--bg:#fff;--p:#2563eb;--bad:#dc2626;}
     *{box-sizing:border-box}
     body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;margin:16px;color:var(--b);background:#f8fafc;}
     header h1{margin:0 0 8px;}
@@ -22,7 +19,7 @@
     .tabs{display:flex;gap:8px;flex-wrap:wrap;}
     .tab{padding:6px 10px;border:1px solid #ddd;border-radius:999px;background:#f3f4f6;cursor:pointer;}
     .tab.active{background:#e0f2fe;border-color:#38bdf8;}
-    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;transition:.15s;}
     .btn.primary{background:var(--p);color:#fff;border-color:var(--p);}
     .btn.warn{background:var(--bad);color:#fff;border-color:var(--bad);}
     .btn-active{background:var(--p)!important;color:#fff!important;border-color:var(--p)!important;}
@@ -61,10 +58,8 @@
     <div class="note" id="holiday-status">祝日データ：—</div>
   </header>
 
-  <!-- スタッフ管理 -->
-  <section class="card stack" aria-labelledby="sec-staff">
-    <h2 id="sec-staff" class="section-title">スタッフ管理</h2>
-
+  <section class="card stack">
+    <h2 class="section-title">スタッフ管理</h2>
     <div id="emp-tabs" class="tabs"></div>
 
     <div class="row">
@@ -79,14 +74,12 @@
       <button id="del-emp" class="btn warn" type="button">− スタッフ削除</button>
       <button id="move-left" class="btn" type="button">← 左へ</button>
       <button id="move-right" class="btn" type="button">→ 右へ</button>
-      <button id="reset-data" class="btn" type="button" title="保存データ（ブラウザ内）を全削除">データ初期化</button>
+      <button id="reset-data" class="btn" type="button">データ初期化</button>
     </div>
   </section>
 
-  <!-- 月切替 & 集計モード -->
-  <section class="card stack" aria-labelledby="sec-month">
-    <h2 id="sec-month" class="section-title">対象月 & 集計モード</h2>
-
+  <section class="card stack">
+    <h2 class="section-title">対象月 & 集計モード</h2>
     <div class="row">
       <button id="prev-month" class="btn" type="button">← 前月</button>
       <input id="month-picker" type="month" />
@@ -104,9 +97,8 @@
   </section>
 
   <!-- 希望票（AI解析 → 反映） -->
-  <section class="card stack" aria-labelledby="sec-wish">
-    <h2 id="sec-wish" class="section-title">希望票（テキスト貼り付け）→ 反映</h2>
-
+  <section class="card stack">
+    <h2 class="section-title">希望票（テキスト貼り付け）→ 出勤簿へ反映</h2>
     <textarea id="wish-text" placeholder="例）扶養の範囲内で。月・火・木のみ出勤。勤務時間は4時間。祝日は休み。&#10;15日は休み、22日は入れます。"></textarea>
 
     <div class="row">
@@ -114,7 +106,7 @@
     </div>
 
     <div class="row" id="wish-buttons">
-      <button id="wish-parse" class="btn" type="button">AI解析</button>
+      <button id="wish-parse-btn" class="btn" type="button">AI解析（プレビュー）</button>
       <button id="wish-apply" class="btn primary" type="button">AI解析して反映</button>
       <span id="wish-summary" class="muted"></span>
     </div>
@@ -122,42 +114,24 @@
     <div id="wish-preview" class="card muted">プレビューなし</div>
   </section>
 
-  <!-- カレンダー -->
-  <section class="card stack" aria-labelledby="sec-cal">
-    <h2 id="sec-cal" class="section-title">出勤簿（カレンダー）</h2>
+  <section class="card stack">
+    <h2 class="section-title">出勤簿（カレンダー）</h2>
     <div id="calendar"></div>
-    <div class="note">
-      ※ 各日の「出勤/休み」をタップして切替。勤務時間は数値を入力（30分＝0.5）。<br />
-      ※ スマホでも数字が見やすいよう、右側に現在値のバッジを表示します。
-    </div>
+    <div class="note">※「出勤/休み」の切替、時間は数値で。30分＝0.5。</div>
   </section>
 
-  <!-- 月次集計 & 年収見込み -->
-  <section class="card stack" aria-labelledby="sec-agg">
-    <h2 id="sec-agg" class="section-title">月次集計 & 年収見込み</h2>
-
-    <div class="kpi">
+  <section class="card stack">
+    <h2 class="section-title">月次集計 & 年収見込み</h2>
+    <div class="row kpi">
       <div class="kpi-item">合計時間：<strong id="sum-hours">0.00 h</strong></div>
       <div class="kpi-item">合計賃金：<strong id="sum-wage">¥0</strong></div>
       <div class="kpi-item">年収見込み：<strong id="proj-annual">¥0</strong></div>
     </div>
 
     <div class="stack">
-      <div class="bar-row">
-        <span class="badge">103万円</span>
-        <progress id="bar-103" max="100" value="0"></progress>
-        <span id="pct-103">0%</span>
-      </div>
-      <div class="bar-row">
-        <span class="badge">106万円</span>
-        <progress id="bar-106" max="100" value="0"></progress>
-        <span id="pct-106">0%</span>
-      </div>
-      <div class="bar-row">
-        <span class="badge">130万円</span>
-        <progress id="bar-130" max="100" value="0"></progress>
-        <span id="pct-130">0%</span>
-      </div>
+      <div class="bar-row"><span class="badge">103万円</span><progress id="bar-103" max="100" value="0"></progress><span id="pct-103">0%</span></div>
+      <div class="bar-row"><span class="badge">106万円</span><progress id="bar-106" max="100" value="0"></progress><span id="pct-106">0%</span></div>
+      <div class="bar-row"><span class="badge">130万円</span><progress id="bar-130" max="100" value="0"></progress><span id="pct-130">0%</span></div>
 
       <div class="row">
         <label>カスタムA(円/年) <input id="th-custom-a" type="number" inputmode="numeric" min="0" step="10000" style="width:140px;" /></label>
@@ -172,25 +146,21 @@
     </div>
   </section>
 
-  <!-- 年間サマリー -->
-  <section class="card stack" aria-labelledby="sec-year">
-    <h2 id="sec-year" class="section-title">年間サマリー（各月×金額/時間）</h2>
-    <div class="row">
-      <button id="refresh-summary" class="btn" type="button">再計算</button>
-    </div>
+  <section class="card stack">
+    <h2 class="section-title">年間サマリー（各月×金額/時間）</h2>
+    <div class="row"><button id="refresh-summary" class="btn" type="button">再計算</button></div>
     <div id="year-summary" class="stack"></div>
   </section>
 
-  <!-- 前月コピー -->
-  <section class="card stack" aria-labelledby="sec-copy">
-    <h2 id="sec-copy" class="section-title">前月コピー</h2>
+  <section class="card stack">
+    <h2 class="section-title">前月コピー</h2>
     <div class="row">
-      <button id="copy-prev-fill" class="btn" type="button" title="前月の内容を空欄だけ埋める">前月→今月（空欄のみ）</button>
-      <button id="copy-prev-overwrite" class="btn warn" type="button" title="今月を前月で上書き">前月→今月（全て上書き）</button>
+      <button id="copy-prev-fill" class="btn" type="button">前月→今月（空欄のみ）</button>
+      <button id="copy-prev-overwrite" class="btn warn" type="button">前月→今月（全て上書き）</button>
     </div>
   </section>
 
-  <!-- ★ 一番下：エクスポート（CSV / Excel） -->
+  <!-- 一番下：エクスポート -->
   <section class="card stack" aria-labelledby="sec-export-bottom">
     <h2 id="sec-export-bottom" class="section-title">エクスポート（CSV / Excel）</h2>
     <div class="row" id="export-buttons">
@@ -198,24 +168,61 @@
       <button id="export-csv-all" class="btn" type="button">CSV（全スタッフ×全月）</button>
       <button id="export-xlsx-month" class="btn" type="button">Excel（今月 .xlsx）</button>
     </div>
-    <div class="note">※ クリックしたボタンが青にハイライトされます（直近操作の視覚フィードバック）。</div>
+    <div class="note">※ クリックしたボタンが青ハイライト（直近操作表示）。</div>
   </section>
 
   <footer class="stack muted" style="margin-top:16px;">
-    <div>ブラウザのみで動作（localStorage に保存）。祝日データ取得に外部APIを使用。</div>
+    <div>ブラウザのみで動作（localStorage 保存）。祝日取得に外部APIを使用。</div>
   </footer>
 
-  <!-- アプリ本体 -->
   <script src="script.js"></script>
-
-  <!-- ボタン青ハイライトの最小ヘルパ -->
   <script>
-    function setActiveBtnIn(containerId, btn){
-      var wrap = document.getElementById(containerId);
-      if(!wrap) return;
-      Array.from(wrap.querySelectorAll('button')).forEach(function(b){ b.classList.remove('btn-active'); });
-      btn.classList.add('btn-active');
-    }
+    // クリック強調（エクスポート）
+    (function(){
+      var wrap = document.getElementById('export-buttons');
+      function setActive(btn){
+        if(!wrap) return;
+        Array.from(wrap.querySelectorAll('button')).forEach(b=>b.classList.remove('btn-active'));
+        btn.classList.add('btn-active');
+      }
+      ['export-csv-month','export-csv-all','export-xlsx-month'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        el.addEventListener('click', function(){
+          try{
+            if(id==='export-csv-month') exportCsvThisMonth();
+            else if(id==='export-csv-all') exportCsvAll();
+            else if(id==='export-xlsx-month') exportXlsxThisMonth();
+            setActive(el);
+          }catch(e){ console.error(e); alert('エクスポートに失敗しました。'); }
+        });
+      });
+    })();
+
+    // クリック強調（AIボタン）
+    (function(){
+      var wrap = document.getElementById('wish-buttons');
+      function setActive(btn){
+        if(!wrap) return;
+        Array.from(wrap.querySelectorAll('button')).forEach(b=>b.classList.remove('btn-active'));
+        btn.classList.add('btn-active');
+      }
+      var parseBtn = document.getElementById('wish-parse-btn');
+      var applyBtn = document.getElementById('wish-apply');
+
+      if(parseBtn){
+        parseBtn.addEventListener('click', function(){
+          if(window.__parseWishPreview) { window.__parseWishPreview(); setActive(parseBtn); }
+          else alert('script.js が読み込まれていません');
+        });
+      }
+      if(applyBtn){
+        applyBtn.addEventListener('click', function(){
+          if(window.__applyFromWish) { window.__applyFromWish(); setActive(applyBtn); }
+          else alert('script.js が読み込まれていません');
+        });
+      }
+    })();
   </script>
 </body>
 </html>
